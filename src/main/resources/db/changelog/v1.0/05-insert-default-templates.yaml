@@ -1,0 +1,312 @@
+databaseChangeLog:
+  - changeSet:
+      id: 01-insert-welcome-email-template
+      author: trademaster
+      context: notification-service
+      changes:
+        - insert:
+            tableName: notification_templates
+            columns:
+              - column:
+                  name: template_id
+                  value: "welcome-email-001"
+              - column:
+                  name: template_name
+                  value: "welcome_email"
+              - column:
+                  name: display_name
+                  value: "Welcome Email"
+              - column:
+                  name: description
+                  value: "Welcome email template for new users"
+              - column:
+                  name: notification_type
+                  value: "EMAIL"
+              - column:
+                  name: category
+                  value: "WELCOME"
+              - column:
+                  name: subject_template
+                  value: "Welcome to TradeMaster, {{firstName}}!"
+              - column:
+                  name: content_template
+                  value: "Dear {{firstName}} {{lastName}},\n\nWelcome to TradeMaster! Your account has been successfully created.\n\nYou can access your dashboard at: {{dashboardUrl}}\n\nBest regards,\nTradeMaster Team"
+              - column:
+                  name: html_template
+                  value: "<html><body><h1>Welcome to TradeMaster, {{firstName}}!</h1><p>Dear {{firstName}} {{lastName}},</p><p>Welcome to TradeMaster! Your account has been successfully created.</p><p><a href='{{dashboardUrl}}'>Access your dashboard</a></p><p>Best regards,<br/>TradeMaster Team</p></body></html>"
+              - column:
+                  name: version
+                  value: 1
+              - column:
+                  name: active
+                  value: true
+              - column:
+                  name: default_priority
+                  value: "HIGH"
+              - column:
+                  name: created_by
+                  value: "system"
+              - column:
+                  name: updated_by
+                  value: "system"
+        - insert:
+            tableName: template_variables
+            columns:
+              - column:
+                  name: template_id
+                  value: "welcome-email-001"
+              - column:
+                  name: variable_name
+                  value: "firstName"
+        - insert:
+            tableName: template_variables
+            columns:
+              - column:
+                  name: template_id
+                  value: "welcome-email-001"
+              - column:
+                  name: variable_name
+                  value: "lastName"
+        - insert:
+            tableName: template_optional_variables
+            columns:
+              - column:
+                  name: template_id
+                  value: "welcome-email-001"
+              - column:
+                  name: variable_name
+                  value: "dashboardUrl"
+
+  - changeSet:
+      id: 02-insert-kyc-approval-template
+      author: trademaster
+      context: notification-service
+      changes:
+        - insert:
+            tableName: notification_templates
+            columns:
+              - column:
+                  name: template_id
+                  value: "kyc-approval-001"
+              - column:
+                  name: template_name
+                  value: "kyc_approval"
+              - column:
+                  name: display_name
+                  value: "KYC Approval Notification"
+              - column:
+                  name: description
+                  value: "KYC approval confirmation email template"
+              - column:
+                  name: notification_type
+                  value: "EMAIL"
+              - column:
+                  name: category
+                  value: "COMPLIANCE"
+              - column:
+                  name: subject_template
+                  value: "KYC Verification Complete - Start Trading!"
+              - column:
+                  name: content_template
+                  value: "Dear {{firstName}},\n\nYour KYC verification has been completed successfully!\n\nYou can now start trading at: {{tradingUrl}}\n\nHappy Trading!\nTradeMaster Team"
+              - column:
+                  name: html_template
+                  value: "<html><body><h1>KYC Verification Complete</h1><p>Dear {{firstName}},</p><p>Your KYC verification has been completed successfully!</p><p><a href='{{tradingUrl}}'>Start Trading Now</a></p><p>Happy Trading!<br/>TradeMaster Team</p></body></html>"
+              - column:
+                  name: version
+                  value: 1
+              - column:
+                  name: active
+                  value: true
+              - column:
+                  name: default_priority
+                  value: "HIGH"
+              - column:
+                  name: created_by
+                  value: "system"
+              - column:
+                  name: updated_by
+                  value: "system"
+        - insert:
+            tableName: template_variables
+            columns:
+              - column:
+                  name: template_id
+                  value: "kyc-approval-001"
+              - column:
+                  name: variable_name
+                  value: "firstName"
+        - insert:
+            tableName: template_optional_variables
+            columns:
+              - column:
+                  name: template_id
+                  value: "kyc-approval-001"
+              - column:
+                  name: variable_name
+                  value: "tradingUrl"
+
+  - changeSet:
+      id: 03-insert-trade-execution-template
+      author: trademaster
+      context: notification-service
+      changes:
+        - insert:
+            tableName: notification_templates
+            columns:
+              - column:
+                  name: template_id
+                  value: "trade-execution-001"
+              - column:
+                  name: template_name
+                  value: "trade_execution"
+              - column:
+                  name: display_name
+                  value: "Trade Execution Notification"
+              - column:
+                  name: description
+                  value: "Trade execution confirmation template"
+              - column:
+                  name: notification_type
+                  value: "IN_APP"
+              - column:
+                  name: category
+                  value: "TRADING"
+              - column:
+                  name: subject_template
+                  value: "Trade Executed"
+              - column:
+                  name: content_template
+                  value: "Your {{action}} order for {{quantity}} shares of {{symbol}} has been executed at ₹{{price}}"
+              - column:
+                  name: version
+                  value: 1
+              - column:
+                  name: active
+                  value: true
+              - column:
+                  name: default_priority
+                  value: "HIGH"
+              - column:
+                  name: rate_limit_per_hour
+                  value: 100
+              - column:
+                  name: created_by
+                  value: "system"
+              - column:
+                  name: updated_by
+                  value: "system"
+        - insert:
+            tableName: template_variables
+            columns:
+              - column:
+                  name: template_id
+                  value: "trade-execution-001"
+              - column:
+                  name: variable_name
+                  value: "action"
+        - insert:
+            tableName: template_variables
+            columns:
+              - column:
+                  name: template_id
+                  value: "trade-execution-001"
+              - column:
+                  name: variable_name
+                  value: "quantity"
+        - insert:
+            tableName: template_variables
+            columns:
+              - column:
+                  name: template_id
+                  value: "trade-execution-001"
+              - column:
+                  name: variable_name
+                  value: "symbol"
+        - insert:
+            tableName: template_variables
+            columns:
+              - column:
+                  name: template_id
+                  value: "trade-execution-001"
+              - column:
+                  name: variable_name
+                  value: "price"
+
+  - changeSet:
+      id: 04-insert-system-maintenance-template
+      author: trademaster
+      context: notification-service
+      changes:
+        - insert:
+            tableName: notification_templates
+            columns:
+              - column:
+                  name: template_id
+                  value: "system-maintenance-001"
+              - column:
+                  name: template_name
+                  value: "system_maintenance"
+              - column:
+                  name: display_name
+                  value: "System Maintenance Notification"
+              - column:
+                  name: description
+                  value: "System maintenance alert template"
+              - column:
+                  name: notification_type
+                  value: "EMAIL"
+              - column:
+                  name: category
+                  value: "SYSTEM"
+              - column:
+                  name: subject_template
+                  value: "Scheduled System Maintenance - {{maintenanceDate}}"
+              - column:
+                  name: content_template
+                  value: "Dear Trader,\n\nWe have scheduled system maintenance on {{maintenanceDate}} from {{startTime}} to {{endTime}}.\n\nDuring this time, trading services will be temporarily unavailable.\n\nWe apologize for any inconvenience.\n\nTradeMaster Team"
+              - column:
+                  name: html_template
+                  value: "<html><body><h1>Scheduled System Maintenance</h1><p>Dear Trader,</p><p>We have scheduled system maintenance on {{maintenanceDate}} from {{startTime}} to {{endTime}}.</p><p><strong>During this time, trading services will be temporarily unavailable.</strong></p><p>We apologize for any inconvenience.</p><p>TradeMaster Team</p></body></html>"
+              - column:
+                  name: version
+                  value: 1
+              - column:
+                  name: active
+                  value: true
+              - column:
+                  name: default_priority
+                  value: "HIGH"
+              - column:
+                  name: created_by
+                  value: "system"
+              - column:
+                  name: updated_by
+                  value: "system"
+        - insert:
+            tableName: template_variables
+            columns:
+              - column:
+                  name: template_id
+                  value: "system-maintenance-001"
+              - column:
+                  name: variable_name
+                  value: "maintenanceDate"
+        - insert:
+            tableName: template_variables
+            columns:
+              - column:
+                  name: template_id
+                  value: "system-maintenance-001"
+              - column:
+                  name: variable_name
+                  value: "startTime"
+        - insert:
+            tableName: template_variables
+            columns:
+              - column:
+                  name: template_id
+                  value: "system-maintenance-001"
+              - column:
+                  name: variable_name
+                  value: "endTime"

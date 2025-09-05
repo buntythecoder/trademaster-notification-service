@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Failed - TradeMaster</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+            color: #212529;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .alert-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .payment-details {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 25px;
+            margin: 30px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .detail-row:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        .detail-label {
+            font-weight: bold;
+            color: #495057;
+        }
+        .detail-value {
+            color: #333;
+            font-weight: 600;
+        }
+        .amount {
+            font-size: 20px;
+            font-weight: bold;
+            color: #dc3545;
+        }
+        .retry-section {
+            background-color: #e8f5e8;
+            padding: 25px;
+            border-radius: 8px;
+            margin: 30px 0;
+            text-align: center;
+        }
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            margin: 20px 10px;
+        }
+        .secondary-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .help-section {
+            background-color: #f8f9fa;
+            padding: 25px;
+            border-radius: 8px;
+            margin: 30px 0;
+        }
+        .help-item {
+            margin-bottom: 15px;
+            padding-left: 25px;
+            position: relative;
+        }
+        .help-item:before {
+            content: "•";
+            color: #28a745;
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+        .footer {
+            background-color: #333;
+            color: #ccc;
+            padding: 30px;
+            text-align: center;
+            font-size: 14px;
+        }
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        .urgent-notice {
+            background-color: #ffeaa7;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 30px 0;
+            border-left: 4px solid #fdcb6e;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="alert-icon">⚠️</div>
+            <h1>Payment Failed</h1>
+            <p style="margin: 10px 0 0 0; font-size: 16px;">Action Required</p>
+        </div>
+        
+        <div class="content">
+            <h2 style="color: #dc3545; margin: 0 0 20px 0;">Payment Could Not Be Processed</h2>
+            <p>We were unable to process your recent payment. Please review the details below and take action to avoid any service interruptions.</p>
+            
+            <div class="payment-details">
+                <div class="detail-row">
+                    <span class="detail-label">Payment ID:</span>
+                    <span class="detail-value" th:text="${paymentId}">PAY-123456789</span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Amount:</span>
+                    <span class="detail-value amount">₹<span th:text="${amount}">2,999.00</span></span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Attempted On:</span>
+                    <span class="detail-value" th:text="${#temporals.format(#temporals.createNow(), 'MMM dd, yyyy HH:mm:ss')}">Jan 15, 2024 10:30:45</span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Failure Reason:</span>
+                    <span class="detail-value">Insufficient funds / Card declined</span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Next Retry:</span>
+                    <span class="detail-value" th:text="${#temporals.format(#temporals.createNow().plusDays(3), 'MMM dd, yyyy')}">Jan 18, 2024</span>
+                </div>
+            </div>
+            
+            <div class="retry-section">
+                <h3 style="color: #28a745; margin: 0 0 15px 0;">Retry Your Payment</h3>
+                <p style="margin: 0 0 20px 0;">You can retry your payment now to continue enjoying uninterrupted TradeMaster services.</p>
+                
+                <div>
+                    <a href="#" th:href="${retryUrl}" class="cta-button">Retry Payment Now</a>
+                    <a href="#" th:href="${supportUrl}" class="cta-button secondary-button">Contact Support</a>
+                </div>
+            </div>
+            
+            <div class="urgent-notice">
+                <h4 style="color: #d68910; margin: 0 0 15px 0;">Important Notice</h4>
+                <p style="margin: 0; color: #7d6608;">
+                    If payment is not completed within 7 days, some features of your TradeMaster account 
+                    may be temporarily limited until payment is resolved.
+                </p>
+            </div>
+            
+            <div class="help-section">
+                <h4 style="margin: 0 0 20px 0; color: #495057;">Common Solutions</h4>
+                
+                <div class="help-item">
+                    <strong>Check your payment method:</strong> Ensure your card has sufficient funds and hasn't expired
+                </div>
+                
+                <div class="help-item">
+                    <strong>Verify billing information:</strong> Make sure your billing address matches your card details
+                </div>
+                
+                <div class="help-item">
+                    <strong>Contact your bank:</strong> Some banks block online transactions; authorize TradeMaster payments
+                </div>
+                
+                <div class="help-item">
+                    <strong>Try a different payment method:</strong> Use an alternative card or payment method
+                </div>
+                
+                <div class="help-item">
+                    <strong>Clear browser cache:</strong> Try using a different browser or device
+                </div>
+            </div>
+            
+            <div style="background-color: #d1ecf1; padding: 20px; border-radius: 8px; margin: 30px 0;">
+                <h4 style="color: #0c5460; margin: 0 0 10px 0;">Need Help?</h4>
+                <p style="margin: 0; color: #0c5460;">
+                    Our customer support team is available 24/7 to help resolve payment issues. 
+                    Contact us at <strong>support@trademaster.com</strong> or call <strong>+91-80-4567-8900</strong>
+                </p>
+            </div>
+            
+            <p style="color: #666; font-size: 14px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6;">
+                This is an automated notification regarding your TradeMaster subscription payment. 
+                Please do not reply to this email. For assistance, use the contact methods provided above.
+            </p>
+        </div>
+        
+        <div class="footer">
+            <p>&copy; 2024 TradeMaster. All rights reserved.</p>
+            <p>
+                <a href="https://app.trademaster.com/privacy">Privacy Policy</a> | 
+                <a href="https://app.trademaster.com/terms">Terms of Service</a> | 
+                <a th:href="${supportUrl}">Support</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

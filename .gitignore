@@ -1,0 +1,177 @@
+# TradeMaster Notification Service - Git Ignore Configuration
+
+# IDE and Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Java compiled files
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+hs_err_pid*
+
+# Gradle build files
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# Maven build files (if used)
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+
+# Spring Boot specific
+*.pid
+*.log
+application-*.properties
+application-*.yml
+!application.yml
+!application-dev.yml
+!application-test.yml
+!application-prod.yml
+!application-docker.yml
+
+# Test related
+*.log.*
+*.tmp
+/test-output/
+
+# Database files (local development)
+*.db
+*.sqlite
+*.h2.db
+data/
+
+# Security and secrets
+*.key
+*.pem
+*.p12
+*.jks
+.env
+.env.local
+.env.production
+secrets/
+
+# Docker build context
+.dockerignore
+
+# Kubernetes secrets
+k8s/secrets/
+*.secret.yml
+
+# Monitoring and logs
+logs/
+monitoring/logs/
+monitoring/data/
+grafana/data/
+prometheus/data/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# JetBrains
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# Eclipse
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+# NetBeans
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+# VS Code
+.vscode/
+
+# Misc
+*.orig
+*.rej
+
+# Node modules (if any frontend tools)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Coverage reports
+coverage/
+*.lcov
+
+# Performance and profiling
+*.hprof
+*.jfr
+
+# Certificate and key files
+*.crt
+*.cert
+ssl/
+certs/
+
+# Dependency directories
+.gradle/caches/
+.gradle/daemon/
+.gradle/native/
+.gradle/wrapper/dists/
+
+# Application specific exclusions
+uploads/
+attachments/
+email-templates/generated/
+notification-templates/generated/
+
+# Local configuration overrides
+application-local.yml
+application-local.properties
+
+# Test containers
+.testcontainers/
+
+# Sonar
+.sonar/
+.scannerwork/
+
+# JaCoCo
+jacoco.exec
+*.exec

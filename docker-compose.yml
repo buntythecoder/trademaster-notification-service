@@ -1,0 +1,270 @@
+# TradeMaster Notification Service Docker Compose
+# MANDATORY: Local Development and Testing Environment
+# MANDATORY: SSL/TLS Ready Configuration
+
+version: '3.8'
+
+services:
+  notification-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: notification-service
+    hostname: notification-service
+    ports:
+      - "8084:8084"
+      - "8443:8443"  # SSL port
+    environment:
+      # Application Configuration
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_THREADS_VIRTUAL_ENABLED=true
+      - SSL_ENABLED=true
+      - SSL_KEYSTORE_PATH=/etc/ssl/certs/notification-service.p12
+      - SSL_KEYSTORE_PASSWORD=changeit
+      - SSL_TRUSTSTORE_PATH=/etc/ssl/certs/ca-trust.p12
+      - SSL_TRUSTSTORE_PASSWORD=changeit
+      
+      # Database Configuration
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/trademaster_notifications
+      - DATABASE_USERNAME=trademaster
+      - DATABASE_PASSWORD=trademaster123
+      
+      # Redis Configuration
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      
+      # Kafka Configuration
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      
+      # Service Discovery
+      - EUREKA_CLIENT_SERVICE_URL=http://eureka:8761/eureka
+      - HOSTNAME=notification-service
+      
+      # SMTP Configuration
+      - SMTP_HOST=mailhog
+      - SMTP_PORT=1025
+      - SMTP_USERNAME=
+      - SMTP_PASSWORD=
+      
+      # Twilio Configuration (for testing)
+      - TWILIO_ACCOUNT_SID=test_account_sid
+      - TWILIO_AUTH_TOKEN=test_auth_token
+      - TWILIO_PHONE_NUMBER=+1234567890
+      
+      # Infrastructure
+      - CLUSTER_NAME=docker-compose
+      - AWS_REGION=local
+      - AVAILABILITY_ZONE=local-1a
+      
+      # JVM Options
+      - JAVA_OPTS=-Xms256m -Xmx512m
+      
+    volumes:
+      - ./ssl-certs:/etc/ssl/certs:ro
+      - ./logs:/var/log/notification-service
+      - notification-temp:/tmp/notification-service
+    networks:
+      - trademaster-network
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+      - eureka
+      - mailhog
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/app/health-check.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.notification.rule=Host(`notification-api.localhost`)"
+      - "traefik.http.routers.notification.tls=true"
+      - "traefik.http.services.notification.loadbalancer.server.port=8084"
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: notification-postgres
+    environment:
+      - POSTGRES_DB=trademaster_notifications
+      - POSTGRES_USER=trademaster
+      - POSTGRES_PASSWORD=trademaster123
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    networks:
+      - trademaster-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trademaster -d trademaster_notifications"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: notification-redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - trademaster-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: notification-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-logs:/var/lib/zookeeper/log
+    networks:
+      - trademaster-network
+    restart: unless-stopped
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: notification-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_LOG_RETENTION_HOURS: 24
+      KAFKA_LOG_RETENTION_BYTES: 1073741824
+      KAFKA_LOG_SEGMENT_BYTES: 268435456
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - trademaster-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  eureka:
+    image: springcloud/eureka:latest
+    container_name: notification-eureka
+    ports:
+      - "8761:8761"
+    environment:
+      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=false
+      - EUREKA_CLIENT_FETCH_REGISTRY=false
+    networks:
+      - trademaster-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: notification-mailhog
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - trademaster-network
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: notification-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - trademaster-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: notification-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - trademaster-network
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: notification-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl-certs:/etc/nginx/ssl:ro
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - notification-service
+    networks:
+      - trademaster-network
+    restart: unless-stopped
+
+networks:
+  trademaster-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  kafka-data:
+    driver: local
+  zookeeper-data:
+    driver: local
+  zookeeper-logs:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+  notification-temp:
+    driver: local

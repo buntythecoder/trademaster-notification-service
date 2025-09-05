@@ -1,0 +1,171 @@
+databaseChangeLog:
+  - changeSet:
+      id: 01-create-user-notification-preferences-table
+      author: trademaster
+      context: notification-service
+      changes:
+        - createTable:
+            tableName: user_notification_preferences
+            columns:
+              - column:
+                  name: preference_id
+                  type: VARCHAR(36)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: user_id
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: notifications_enabled
+                  type: BOOLEAN
+                  defaultValue: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: preferred_channel
+                  type: VARCHAR(20)
+                  defaultValue: 'EMAIL'
+                  constraints:
+                    nullable: false
+              - column:
+                  name: email_address
+                  type: VARCHAR(255)
+              - column:
+                  name: phone_number
+                  type: VARCHAR(20)
+              - column:
+                  name: quiet_hours_enabled
+                  type: BOOLEAN
+                  defaultValue: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: quiet_start_time
+                  type: TIME
+              - column:
+                  name: quiet_end_time
+                  type: TIME
+              - column:
+                  name: time_zone
+                  type: VARCHAR(50)
+                  defaultValue: 'UTC'
+              - column:
+                  name: frequency_limit_per_hour
+                  type: INTEGER
+              - column:
+                  name: frequency_limit_per_day
+                  type: INTEGER
+              - column:
+                  name: marketing_enabled
+                  type: BOOLEAN
+                  defaultValue: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: system_alerts_enabled
+                  type: BOOLEAN
+                  defaultValue: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: trading_alerts_enabled
+                  type: BOOLEAN
+                  defaultValue: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: account_alerts_enabled
+                  type: BOOLEAN
+                  defaultValue: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: language
+                  type: VARCHAR(10)
+                  defaultValue: 'en'
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_by
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 02-create-user-enabled-notification-types-table
+      author: trademaster
+      context: notification-service
+      changes:
+        - createTable:
+            tableName: user_enabled_notification_types
+            columns:
+              - column:
+                  name: preference_id
+                  type: VARCHAR(36)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: notification_type
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: user_enabled_notification_types
+            baseColumnNames: preference_id
+            referencedTableName: user_notification_preferences
+            referencedColumnNames: preference_id
+            constraintName: fk_user_enabled_types_preference
+            onDelete: CASCADE
+        - addUniqueConstraint:
+            tableName: user_enabled_notification_types
+            columnNames: preference_id, notification_type
+            constraintName: uk_user_enabled_types
+
+  - changeSet:
+      id: 03-create-user-notification-categories-table
+      author: trademaster
+      context: notification-service
+      changes:
+        - createTable:
+            tableName: user_notification_categories
+            columns:
+              - column:
+                  name: preference_id
+                  type: VARCHAR(36)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: category
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: user_notification_categories
+            baseColumnNames: preference_id
+            referencedTableName: user_notification_preferences
+            referencedColumnNames: preference_id
+            constraintName: fk_user_categories_preference
+            onDelete: CASCADE
+        - addUniqueConstraint:
+            tableName: user_notification_categories
+            columnNames: preference_id, category
+            constraintName: uk_user_categories

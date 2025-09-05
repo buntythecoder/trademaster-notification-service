@@ -1,0 +1,409 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 
+TradeMaster Notification Service Logging Configuration
+MANDATORY: Log Aggregation Pipeline Readiness
+MANDATORY: Structured Logging - Rule #15
+MANDATORY: Production Monitoring Standards
+-->
+<configuration>
+    <springProfile name="!prod">
+        <!-- Development and Test Profiles -->
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                <providers>
+                    <timestamp/>
+                    <logLevel/>
+                    <loggerName/>
+                    <mdc/>
+                    <message/>
+                    <stackTrace/>
+                    <pattern>
+                        <pattern>
+                            {
+                                "service": "notification-service",
+                                "version": "2.0.0",
+                                "environment": "${SPRING_PROFILES_ACTIVE:-dev}",
+                                "instance": "${HOSTNAME:-localhost}",
+                                "pid": "${PID:-unknown}"
+                            }
+                        </pattern>
+                    </pattern>
+                </providers>
+                <includeContext>true</includeContext>
+                <includeMdc>true</includeMdc>
+            </encoder>
+        </appender>
+        
+        <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>logs/notification-service.log</file>
+            <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                <providers>
+                    <timestamp/>
+                    <logLevel/>
+                    <loggerName/>
+                    <mdc/>
+                    <message/>
+                    <stackTrace/>
+                    <pattern>
+                        <pattern>
+                            {
+                                "service": "notification-service",
+                                "version": "2.0.0",
+                                "environment": "${SPRING_PROFILES_ACTIVE:-dev}",
+                                "instance": "${HOSTNAME:-localhost}",
+                                "pid": "${PID:-unknown}"
+                            }
+                        </pattern>
+                    </pattern>
+                </providers>
+                <includeContext>true</includeContext>
+                <includeMdc>true</includeMdc>
+            </encoder>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>logs/notification-service.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+                <maxFileSize>100MB</maxFileSize>
+                <maxHistory>30</maxHistory>
+                <totalSizeCap>1GB</totalSizeCap>
+            </rollingPolicy>
+        </appender>
+    </springProfile>
+
+    <springProfile name="prod">
+        <!-- Production Profile - Optimized for Log Aggregation -->
+        <appender name="JSON_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>/var/log/notification-service/application.log</file>
+            <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                <providers>
+                    <timestamp>
+                        <fieldName>@timestamp</fieldName>
+                    </timestamp>
+                    <version/>
+                    <logLevel>
+                        <fieldName>level</fieldName>
+                    </logLevel>
+                    <loggerName>
+                        <fieldName>logger</fieldName>
+                    </loggerName>
+                    <mdc>
+                        <includeKeyName>false</includeKeyName>
+                    </mdc>
+                    <message>
+                        <fieldName>message</fieldName>
+                    </message>
+                    <stackTrace>
+                        <fieldName>stack_trace</fieldName>
+                    </stackTrace>
+                    <pattern>
+                        <pattern>
+                            {
+                                "service": "notification-service",
+                                "version": "2.0.0",
+                                "environment": "production",
+                                "instance": "${HOSTNAME:-unknown}",
+                                "pod_name": "${POD_NAME:-unknown}",
+                                "pod_namespace": "${POD_NAMESPACE:-default}",
+                                "node_name": "${NODE_NAME:-unknown}",
+                                "cluster": "${CLUSTER_NAME:-trademaster}",
+                                "region": "${AWS_REGION:-us-west-2}",
+                                "availability_zone": "${AVAILABILITY_ZONE:-us-west-2a}",
+                                "pid": "${PID:-unknown}",
+                                "thread": "%thread"
+                            }
+                        </pattern>
+                    </pattern>
+                </providers>
+                <includeContext>true</includeContext>
+                <includeMdc>true</includeMdc>
+            </encoder>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>/var/log/notification-service/application.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+                <maxFileSize>100MB</maxFileSize>
+                <maxHistory>30</maxHistory>
+                <totalSizeCap>1GB</totalSizeCap>
+                <cleanHistoryOnStart>true</cleanHistoryOnStart>
+            </rollingPolicy>
+        </appender>
+
+        <!-- Security Audit Log - Separate file for compliance -->
+        <appender name="SECURITY_AUDIT" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>/var/log/notification-service/security-audit.log</file>
+            <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                <providers>
+                    <timestamp>
+                        <fieldName>@timestamp</fieldName>
+                    </timestamp>
+                    <logLevel>
+                        <fieldName>level</fieldName>
+                    </logLevel>
+                    <mdc>
+                        <includeKeyName>false</includeKeyName>
+                    </mdc>
+                    <message>
+                        <fieldName>message</fieldName>
+                    </message>
+                    <pattern>
+                        <pattern>
+                            {
+                                "service": "notification-service",
+                                "version": "2.0.0",
+                                "environment": "production",
+                                "audit_type": "security",
+                                "instance": "${HOSTNAME:-unknown}",
+                                "cluster": "${CLUSTER_NAME:-trademaster}",
+                                "region": "${AWS_REGION:-us-west-2}"
+                            }
+                        </pattern>
+                    </pattern>
+                </providers>
+                <includeContext>true</includeContext>
+                <includeMdc>true</includeMdc>
+            </encoder>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>/var/log/notification-service/security-audit.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+                <maxFileSize>100MB</maxFileSize>
+                <maxHistory>2555</maxHistory>
+                <totalSizeCap>10GB</totalSizeCap>
+                <cleanHistoryOnStart>false</cleanHistoryOnStart>
+            </rollingPolicy>
+        </appender>
+
+        <!-- Business Audit Log - For regulatory compliance -->
+        <appender name="BUSINESS_AUDIT" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>/var/log/notification-service/business-audit.log</file>
+            <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                <providers>
+                    <timestamp>
+                        <fieldName>@timestamp</fieldName>
+                    </timestamp>
+                    <logLevel>
+                        <fieldName>level</fieldName>
+                    </logLevel>
+                    <mdc>
+                        <includeKeyName>false</includeKeyName>
+                    </mdc>
+                    <message>
+                        <fieldName>message</fieldName>
+                    </message>
+                    <pattern>
+                        <pattern>
+                            {
+                                "service": "notification-service",
+                                "version": "2.0.0",
+                                "environment": "production",
+                                "audit_type": "business",
+                                "instance": "${HOSTNAME:-unknown}",
+                                "cluster": "${CLUSTER_NAME:-trademaster}",
+                                "region": "${AWS_REGION:-us-west-2}"
+                            }
+                        </pattern>
+                    </pattern>
+                </providers>
+                <includeContext>true</includeContext>
+                <includeMdc>true</includeMdc>
+            </encoder>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>/var/log/notification-service/business-audit.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+                <maxFileSize>100MB</maxFileSize>
+                <maxHistory>2555</maxHistory>
+                <totalSizeCap>10GB</totalSizeCap>
+                <cleanHistoryOnStart>false</cleanHistoryOnStart>
+            </rollingPolicy>
+        </appender>
+
+        <!-- Performance Metrics Log -->
+        <appender name="PERFORMANCE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>/var/log/notification-service/performance.log</file>
+            <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                <providers>
+                    <timestamp>
+                        <fieldName>@timestamp</fieldName>
+                    </timestamp>
+                    <mdc>
+                        <includeKeyName>false</includeKeyName>
+                    </mdc>
+                    <message>
+                        <fieldName>message</fieldName>
+                    </message>
+                    <pattern>
+                        <pattern>
+                            {
+                                "service": "notification-service",
+                                "version": "2.0.0",
+                                "environment": "production",
+                                "log_type": "performance",
+                                "instance": "${HOSTNAME:-unknown}",
+                                "cluster": "${CLUSTER_NAME:-trademaster}"
+                            }
+                        </pattern>
+                    </pattern>
+                </providers>
+                <includeContext>true</includeContext>
+                <includeMdc>true</includeMdc>
+            </encoder>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>/var/log/notification-service/performance.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+                <maxFileSize>50MB</maxFileSize>
+                <maxHistory>7</maxHistory>
+                <totalSizeCap>500MB</totalSizeCap>
+            </rollingPolicy>
+        </appender>
+
+        <!-- Error Log - High priority for alerting -->
+        <appender name="ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>/var/log/notification-service/errors.log</file>
+            <filter class="ch.qos.logback.classic.filter.LevelFilter">
+                <level>ERROR</level>
+                <onMatch>ACCEPT</onMatch>
+                <onMismatch>DENY</onMismatch>
+            </filter>
+            <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                <providers>
+                    <timestamp>
+                        <fieldName>@timestamp</fieldName>
+                    </timestamp>
+                    <logLevel>
+                        <fieldName>level</fieldName>
+                    </logLevel>
+                    <loggerName>
+                        <fieldName>logger</fieldName>
+                    </loggerName>
+                    <mdc>
+                        <includeKeyName>false</includeKeyName>
+                    </mdc>
+                    <message>
+                        <fieldName>message</fieldName>
+                    </message>
+                    <stackTrace>
+                        <fieldName>stack_trace</fieldName>
+                    </stackTrace>
+                    <pattern>
+                        <pattern>
+                            {
+                                "service": "notification-service",
+                                "version": "2.0.0",
+                                "environment": "production",
+                                "log_type": "error",
+                                "severity": "high",
+                                "instance": "${HOSTNAME:-unknown}",
+                                "cluster": "${CLUSTER_NAME:-trademaster}",
+                                "alert_required": true
+                            }
+                        </pattern>
+                    </pattern>
+                </providers>
+                <includeContext>true</includeContext>
+                <includeMdc>true</includeMdc>
+            </encoder>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>/var/log/notification-service/errors.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+                <maxFileSize>50MB</maxFileSize>
+                <maxHistory>90</maxHistory>
+                <totalSizeCap>2GB</totalSizeCap>
+            </rollingPolicy>
+        </appender>
+
+        <!-- Console output for container logs -->
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                <providers>
+                    <timestamp>
+                        <fieldName>@timestamp</fieldName>
+                    </timestamp>
+                    <logLevel>
+                        <fieldName>level</fieldName>
+                    </logLevel>
+                    <loggerName>
+                        <fieldName>logger</fieldName>
+                    </loggerName>
+                    <mdc>
+                        <includeKeyName>false</includeKeyName>
+                    </mdc>
+                    <message>
+                        <fieldName>message</fieldName>
+                    </message>
+                    <stackTrace>
+                        <fieldName>stack_trace</fieldName>
+                    </stackTrace>
+                    <pattern>
+                        <pattern>
+                            {
+                                "service": "notification-service",
+                                "version": "2.0.0",
+                                "environment": "production",
+                                "instance": "${HOSTNAME:-unknown}",
+                                "pod_name": "${POD_NAME:-unknown}",
+                                "cluster": "${CLUSTER_NAME:-trademaster}"
+                            }
+                        </pattern>
+                    </pattern>
+                </providers>
+                <includeContext>true</includeContext>
+                <includeMdc>true</includeMdc>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <!-- Logger configurations for different components -->
+    
+    <!-- Security Audit Logger -->
+    <logger name="com.trademaster.notification.security" level="INFO" additivity="false">
+        <springProfile name="prod">
+            <appender-ref ref="SECURITY_AUDIT"/>
+            <appender-ref ref="JSON_FILE"/>
+        </springProfile>
+        <springProfile name="!prod">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="FILE"/>
+        </springProfile>
+    </logger>
+
+    <!-- Business Audit Logger -->
+    <logger name="BUSINESS_AUDIT" level="INFO" additivity="false">
+        <springProfile name="prod">
+            <appender-ref ref="BUSINESS_AUDIT"/>
+            <appender-ref ref="JSON_FILE"/>
+        </springProfile>
+        <springProfile name="!prod">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="FILE"/>
+        </springProfile>
+    </logger>
+
+    <!-- Performance Logger -->
+    <logger name="PERFORMANCE" level="INFO" additivity="false">
+        <springProfile name="prod">
+            <appender-ref ref="PERFORMANCE"/>
+        </springProfile>
+        <springProfile name="!prod">
+            <appender-ref ref="CONSOLE"/>
+        </springProfile>
+    </logger>
+
+    <!-- Application loggers -->
+    <logger name="com.trademaster.notification" level="INFO"/>
+    <logger name="org.springframework.kafka" level="WARN"/>
+    <logger name="org.springframework.mail" level="WARN"/>
+    <logger name="org.hibernate.SQL" level="WARN"/>
+    <logger name="io.github.resilience4j" level="INFO"/>
+    <logger name="org.springframework.security" level="WARN"/>
+    <logger name="com.twilio" level="WARN"/>
+
+    <!-- Circuit breaker and resilience logging -->
+    <logger name="io.github.resilience4j.circuitbreaker" level="INFO"/>
+    <logger name="io.github.resilience4j.retry" level="INFO"/>
+    <logger name="io.github.resilience4j.timelimiter" level="INFO"/>
+
+    <!-- Root logger configuration -->
+    <root level="INFO">
+        <springProfile name="prod">
+            <appender-ref ref="JSON_FILE"/>
+            <appender-ref ref="ERROR_FILE"/>
+            <appender-ref ref="CONSOLE"/>
+        </springProfile>
+        <springProfile name="!prod">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="FILE"/>
+        </springProfile>
+    </root>
+
+</configuration>

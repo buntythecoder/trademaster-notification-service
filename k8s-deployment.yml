@@ -1,0 +1,410 @@
+# TradeMaster Notification Service Kubernetes Deployment
+# MANDATORY: Production Deployment Standards
+# MANDATORY: Load Balancer Integration
+# MANDATORY: SSL/TLS Certificate Management
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: trademaster-notification
+  labels:
+    name: trademaster-notification
+    component: notification-service
+    version: "2.0.0"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notification-service-config
+  namespace: trademaster-notification
+data:
+  SPRING_PROFILES_ACTIVE: "prod"
+  SSL_ENABLED: "true"
+  SSL_KEYSTORE_PATH: "/etc/ssl/certs/notification-service.p12"
+  SSL_TRUSTSTORE_PATH: "/etc/ssl/certs/ca-trust.p12"
+  MANAGEMENT_PORT: "8084"
+  DATABASE_URL: "jdbc:postgresql://postgres:5432/trademaster_notifications"
+  DATABASE_USERNAME: "trademaster"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  EUREKA_CLIENT_SERVICE_URL: "http://eureka-server:8761/eureka"
+  HOSTNAME: "notification-service"
+  CLUSTER_NAME: "trademaster"
+  AWS_REGION: "us-west-2"
+  AVAILABILITY_ZONE: "us-west-2a"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: notification-service-secrets
+  namespace: trademaster-notification
+type: Opaque
+stringData:
+  DATABASE_PASSWORD: "${DATABASE_PASSWORD}"
+  SSL_KEYSTORE_PASSWORD: "${SSL_KEYSTORE_PASSWORD}"
+  SSL_TRUSTSTORE_PASSWORD: "${SSL_TRUSTSTORE_PASSWORD}"
+  REDIS_PASSWORD: "${REDIS_PASSWORD}"
+  SMTP_PASSWORD: "${SMTP_PASSWORD}"
+  TWILIO_AUTH_TOKEN: "${TWILIO_AUTH_TOKEN}"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+  namespace: trademaster-notification
+  labels:
+    app: notification-service
+    component: notification-service
+    version: "2.0.0"
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: notification-service
+  template:
+    metadata:
+      labels:
+        app: notification-service
+        component: notification-service
+        version: "2.0.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8084"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      serviceAccountName: notification-service
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 3000
+        fsGroup: 2000
+      containers:
+      - name: notification-service
+        image: trademaster/notification-service:2.0.0
+        imagePullPolicy: Always
+        ports:
+        - name: https
+          containerPort: 8084
+          protocol: TCP
+        - name: management
+          containerPort: 8084
+          protocol: TCP
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        envFrom:
+        - configMapRef:
+            name: notification-service-config
+        - secretRef:
+            name: notification-service-secrets
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: ssl-certificates
+          mountPath: /etc/ssl/certs
+          readOnly: true
+        - name: application-logs
+          mountPath: /var/log/notification-service
+        - name: tmp-volume
+          mountPath: /tmp
+        livenessProbe:
+          httpGet:
+            path: /ops/liveness
+            port: https
+            scheme: HTTPS
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+          successThreshold: 1
+        readinessProbe:
+          httpGet:
+            path: /ops/readiness
+            port: https
+            scheme: HTTPS
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        startupProbe:
+          httpGet:
+            path: /ops/startup
+            port: https
+            scheme: HTTPS
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+          successThreshold: 1
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 15"]
+      volumes:
+      - name: ssl-certificates
+        secret:
+          secretName: notification-service-ssl-certs
+          defaultMode: 0400
+      - name: application-logs
+        emptyDir: {}
+      - name: tmp-volume
+        emptyDir: {}
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+  namespace: trademaster-notification
+  labels:
+    app: notification-service
+    component: notification-service
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "tcp"
+    service.beta.kubernetes.io/aws-load-balancer-ssl-ports: "https"
+    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: "${SSL_CERTIFICATE_ARN}"
+    service.beta.kubernetes.io/aws-load-balancer-ssl-negotiation-policy: "ELBSecurityPolicy-TLS-1-2-2017-01"
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8084"
+    prometheus.io/path: "/actuator/prometheus"
+spec:
+  type: LoadBalancer
+  sessionAffinity: None
+  ports:
+  - name: https
+    port: 443
+    targetPort: https
+    protocol: TCP
+  - name: management
+    port: 8084
+    targetPort: management
+    protocol: TCP
+  selector:
+    app: notification-service
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service-internal
+  namespace: trademaster-notification
+  labels:
+    app: notification-service
+    component: notification-service
+    type: internal
+spec:
+  type: ClusterIP
+  ports:
+  - name: https
+    port: 8084
+    targetPort: https
+    protocol: TCP
+  - name: management
+    port: 8084
+    targetPort: management
+    protocol: TCP
+  selector:
+    app: notification-service
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: notification-service
+  namespace: trademaster-notification
+  labels:
+    app: notification-service
+    component: notification-service
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: notification-service-ingress
+  namespace: trademaster-notification
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+    nginx.ingress.kubernetes.io/upstream-hash-by: "$request_uri"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+  - hosts:
+    - notification-api.trademaster.com
+    secretName: notification-service-tls
+  rules:
+  - host: notification-api.trademaster.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: notification-service
+            port:
+              name: https
+      - path: /ops
+        pathType: Prefix
+        backend:
+          service:
+            name: notification-service
+            port:
+              name: management
+      - path: /actuator
+        pathType: Prefix
+        backend:
+          service:
+            name: notification-service
+            port:
+              name: management
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: notification-service-pdb
+  namespace: trademaster-notification
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: notification-service
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: notification-service-hpa
+  namespace: trademaster-notification
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: notification-service
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      selectPolicy: Max
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: notification-service-netpol
+  namespace: trademaster-notification
+spec:
+  podSelector:
+    matchLabels:
+      app: notification-service
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: trademaster-gateway
+    - namespaceSelector:
+        matchLabels:
+          name: trademaster-monitoring
+    ports:
+    - protocol: TCP
+      port: 8084
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: trademaster-services
+    ports:
+    - protocol: TCP
+      port: 8084
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: trademaster-data
+    ports:
+    - protocol: TCP
+      port: 5432
+    - protocol: TCP
+      port: 6379
+    - protocol: TCP
+      port: 9092
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: trademaster-discovery
+    ports:
+    - protocol: TCP
+      port: 8761
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 587
+    - protocol: TCP
+      port: 25

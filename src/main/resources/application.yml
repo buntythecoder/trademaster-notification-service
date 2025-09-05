@@ -1,0 +1,259 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: notification-service
+    
+  datasource:
+    url: jdbc:postgresql://localhost:5432/trademaster_notifications
+    username: ${DB_USERNAME:trademaster}
+    password: ${DB_PASSWORD:trademaster123}
+    driver-class-name: org.postgresql.Driver
+    
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    open-in-view: false
+    
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+    enabled: true
+    drop-first: false
+    
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: notification-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.trademaster.*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      
+  mail:
+    host: ${SMTP_HOST:smtp.gmail.com}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:noreply@trademaster.com}
+    password: ${SMTP_PASSWORD:your_app_password}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          ssl:
+            trust: smtp.gmail.com
+            
+  redis:
+    host: localhost
+    port: 6379
+    password: ${REDIS_PASSWORD:}
+    timeout: 2000ms
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+
+# Twilio Configuration
+twilio:
+  account-sid: ${TWILIO_ACCOUNT_SID:your_account_sid}
+  auth-token: ${TWILIO_AUTH_TOKEN:your_auth_token}
+  phone-number: ${TWILIO_PHONE_NUMBER:+1234567890}
+
+# Notification Configuration
+notification:
+  email:
+    enabled: ${EMAIL_NOTIFICATIONS_ENABLED:true}
+    templates-path: classpath:templates/email/
+    default-sender: ${DEFAULT_EMAIL_SENDER:noreply@trademaster.com}
+    retry:
+      max-attempts: 3
+      backoff-delay: 5000
+  sms:
+    enabled: ${SMS_NOTIFICATIONS_ENABLED:true}
+    retry:
+      max-attempts: 3
+      backoff-delay: 5000
+  rate-limit:
+    email:
+      requests-per-minute: 100
+      requests-per-hour: 1000
+    sms:
+      requests-per-minute: 10
+      requests-per-hour: 100
+  inapp:
+    enabled: ${IN_APP_NOTIFICATIONS_ENABLED:true}
+    websocket-path: /ws/notifications
+
+# Resilience4j Configuration
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        max-wait-duration-in-half-open-state: 10s
+        sliding-window-type: count_based
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        wait-duration-in-open-state: 30s
+        automatic-transition-from-open-to-half-open-enabled: true
+        record-exceptions:
+          - java.lang.Exception
+    instances:
+      emailService:
+        base-config: default
+        failure-rate-threshold: 60
+        sliding-window-size: 15
+        minimum-number-of-calls: 8
+        wait-duration-in-open-state: 60s
+        permitted-number-of-calls-in-half-open-state: 5
+      smsService:
+        base-config: default
+        failure-rate-threshold: 40
+        sliding-window-size: 8
+        minimum-number-of-calls: 4
+        wait-duration-in-open-state: 120s
+        permitted-number-of-calls-in-half-open-state: 2
+      pushService:
+        base-config: default
+        failure-rate-threshold: 50
+        sliding-window-size: 12
+        minimum-number-of-calls: 6
+        wait-duration-in-open-state: 45s
+        permitted-number-of-calls-in-half-open-state: 3
+  retry:
+    configs:
+      default:
+        max-attempts: 3
+        wait-duration: 500ms
+        exponential-backoff-multiplier: 2
+        retry-exceptions:
+          - java.lang.Exception
+    instances:
+      emailService:
+        base-config: default
+        max-attempts: 4
+        wait-duration: 1s
+        exponential-backoff-multiplier: 1.5
+      smsService:
+        base-config: default
+        max-attempts: 2
+        wait-duration: 800ms
+        exponential-backoff-multiplier: 2
+      pushService:
+        base-config: default
+        max-attempts: 3
+        wait-duration: 600ms
+        exponential-backoff-multiplier: 1.8
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 10s
+        cancel-running-future: true
+    instances:
+      emailService:
+        timeout-duration: 15s
+      smsService:
+        timeout-duration: 8s
+      pushService:
+        timeout-duration: 5s
+
+# MANDATORY: Enhanced Monitoring Configuration per TradeMaster Standards
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,notification,env,threaddump,heapdump,eureka
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+      probes:
+        enabled: true
+    info:
+      enabled: true
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+    notification:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        step: 1m
+        descriptions: true
+    tags:
+      application: trademaster
+      service: notification-service
+      version: 2.0.0
+      environment: ${spring.profiles.active:local}
+    web:
+      client:
+        request:
+          autotime:
+            enabled: true
+    distribution:
+      percentiles-histogram:
+        "[http.server.requests]": true
+        "[notification.send.duration]": true
+        "[email.send.duration]": true
+        "[sms.send.duration]": true
+      percentiles:
+        http.server.requests: 0.5, 0.75, 0.95, 0.99
+        notification.send.duration: 0.5, 0.75, 0.95, 0.99
+        email.send.duration: 0.5, 0.75, 0.95, 0.99
+        sms.send.duration: 0.5, 0.75, 0.95, 0.99
+        external.service.call.duration: 0.5, 0.75, 0.95, 0.99
+      slo:
+        http.server.requests: 50ms,100ms,200ms,500ms
+        notification.send.duration: 100ms,500ms,1s,3s
+        email.send.duration: 500ms,2s,5s,10s
+        sms.send.duration: 200ms,1s,3s,10s
+        external.service.call.duration: 100ms,500ms,1s,3s
+  info:
+    env:
+      enabled: true
+    git:
+      mode: full
+    build:
+      enabled: true
+  health:
+    circuitbreakers:
+      enabled: true
+    ratelimiters:
+      enabled: true
+    diskspace:
+      enabled: true
+    redis:
+      enabled: true
+    db:
+      enabled: true
+    kafka:
+      enabled: true
+    mail:
+      enabled: true
+
+logging:
+  level:
+    com.trademaster: DEBUG
+    org.springframework.kafka: INFO
+    org.springframework.mail: DEBUG
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

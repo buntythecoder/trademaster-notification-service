@@ -1,0 +1,33 @@
+databaseChangeLog:
+  # Note: All entity-defined indexes have been moved to 06-add-missing-indexes.yaml
+  # to avoid duplication. Only keeping unique constraint indexes here.
+
+  - changeSet:
+      id: 04-create-composite-indexes
+      author: trademaster
+      context: notification-service
+      changes:
+        - createIndex:
+            indexName: idx_notification_status_created
+            tableName: notification_history
+            columns:
+              - column:
+                  name: status
+              - column:
+                  name: created_at
+        - createIndex:
+            indexName: idx_template_category_active
+            tableName: notification_templates
+            columns:
+              - column:
+                  name: category
+              - column:
+                  name: active
+        - createIndex:
+            indexName: idx_user_enabled_marketing
+            tableName: user_notification_preferences
+            columns:
+              - column:
+                  name: user_id
+              - column:
+                  name: marketing_enabled

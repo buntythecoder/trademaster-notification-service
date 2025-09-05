@@ -1,0 +1,222 @@
+databaseChangeLog:
+  - changeSet:
+      id: 1
+      author: trademaster-system
+      changes:
+        # Create function for data retention cleanup
+        - sql:
+            sql: |
+              CREATE OR REPLACE FUNCTION cleanup_notification_data()
+              RETURNS TABLE(
+                table_name TEXT,
+                rows_deleted BIGINT,
+                cleanup_date TIMESTAMP WITH TIME ZONE
+              ) 
+              LANGUAGE plpgsql
+              AS $$
+              DECLARE
+                audit_deleted BIGINT;
+                metrics_deleted BIGINT;
+                resolved_errors_deleted BIGINT;
+              BEGIN
+                -- Clean up audit logs older than 90 days (except security events)
+                DELETE FROM notification_audit_log 
+                WHERE created_at < NOW() - INTERVAL '90 days'
+                  AND action NOT LIKE '%SECURITY%'
+                  AND action NOT LIKE '%AUTH%';
+                GET DIAGNOSTICS audit_deleted = ROW_COUNT;
+                
+                -- Clean up metrics older than 30 days
+                DELETE FROM notification_metrics 
+                WHERE timestamp < NOW() - INTERVAL '30 days';
+                GET DIAGNOSTICS metrics_deleted = ROW_COUNT;
+                
+                -- Clean up resolved errors older than 30 days
+                DELETE FROM notification_errors 
+                WHERE resolved = true 
+                  AND resolved_at < NOW() - INTERVAL '30 days';
+                GET DIAGNOSTICS resolved_errors_deleted = ROW_COUNT;
+                
+                -- Return cleanup summary
+                RETURN QUERY SELECT 'notification_audit_log'::TEXT, audit_deleted, NOW();
+                RETURN QUERY SELECT 'notification_metrics'::TEXT, metrics_deleted, NOW();
+                RETURN QUERY SELECT 'notification_errors'::TEXT, resolved_errors_deleted, NOW();
+              END;
+              $$;
+  - changeSet:
+      id: 2
+      author: trademaster-system
+      changes:
+        # Create table for tracking cleanup operations
+        - createTable:
+            tableName: data_retention_log
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: cleanup_date
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: table_name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: rows_deleted
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: cleanup_duration_ms
+                  type: BIGINT
+                  constraints:
+                    nullable: true
+              - column:
+                  name: triggered_by
+                  type: VARCHAR(100)
+                  defaultValue: 'automated'
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: VARCHAR(50)
+                  defaultValue: 'completed'
+                  constraints:
+                    nullable: false
+  - changeSet:
+      id: 3
+      author: trademaster-system
+      changes:
+        # Create enhanced cleanup function that logs operations
+        - sql:
+            sql: |
+              CREATE OR REPLACE FUNCTION execute_data_retention_cleanup()
+              RETURNS TABLE(
+                cleanup_summary JSONB
+              )
+              LANGUAGE plpgsql
+              AS $$
+              DECLARE
+                start_time TIMESTAMP WITH TIME ZONE;
+                end_time TIMESTAMP WITH TIME ZONE;
+                audit_deleted BIGINT;
+                metrics_deleted BIGINT;
+                errors_deleted BIGINT;
+                cleanup_id UUID;
+                summary JSONB;
+              BEGIN
+                start_time := NOW();
+                
+                -- Security audit logs: keep for 7 years for compliance
+                DELETE FROM notification_audit_log 
+                WHERE created_at < NOW() - INTERVAL '7 years'
+                  AND (action LIKE '%SECURITY%' OR action LIKE '%AUTH%');
+                
+                -- Regular audit logs: keep for 90 days
+                DELETE FROM notification_audit_log 
+                WHERE created_at < NOW() - INTERVAL '90 days'
+                  AND action NOT LIKE '%SECURITY%'
+                  AND action NOT LIKE '%AUTH%';
+                GET DIAGNOSTICS audit_deleted = ROW_COUNT;
+                
+                -- Metrics: keep for 30 days
+                DELETE FROM notification_metrics 
+                WHERE timestamp < NOW() - INTERVAL '30 days';
+                GET DIAGNOSTICS metrics_deleted = ROW_COUNT;
+                
+                -- Resolved errors: keep for 30 days
+                DELETE FROM notification_errors 
+                WHERE resolved = true 
+                  AND resolved_at < NOW() - INTERVAL '30 days';
+                GET DIAGNOSTICS errors_deleted = ROW_COUNT;
+                
+                end_time := NOW();
+                
+                -- Log cleanup operations
+                INSERT INTO data_retention_log (table_name, rows_deleted, cleanup_duration_ms, triggered_by)
+                VALUES 
+                  ('notification_audit_log', audit_deleted, EXTRACT(EPOCH FROM (end_time - start_time)) * 1000, 'automated'),
+                  ('notification_metrics', metrics_deleted, EXTRACT(EPOCH FROM (end_time - start_time)) * 1000, 'automated'),
+                  ('notification_errors', errors_deleted, EXTRACT(EPOCH FROM (end_time - start_time)) * 1000, 'automated');
+                
+                -- Create summary
+                summary := jsonb_build_object(
+                  'cleanup_date', start_time,
+                  'duration_ms', EXTRACT(EPOCH FROM (end_time - start_time)) * 1000,
+                  'tables_cleaned', jsonb_build_object(
+                    'notification_audit_log', audit_deleted,
+                    'notification_metrics', metrics_deleted,
+                    'notification_errors', errors_deleted
+                  ),
+                  'total_rows_deleted', audit_deleted + metrics_deleted + errors_deleted,
+                  'status', 'completed'
+                );
+                
+                RETURN QUERY SELECT summary;
+              END;
+              $$;
+  - changeSet:
+      id: 4
+      author: trademaster-system
+      changes:
+        # Create database health check function
+        - sql:
+            sql: |
+              CREATE OR REPLACE FUNCTION check_database_health()
+              RETURNS TABLE(
+                health_check JSONB
+              )
+              LANGUAGE plpgsql
+              AS $$
+              DECLARE
+                db_size BIGINT;
+                table_stats JSONB;
+                connection_count INTEGER;
+                active_queries INTEGER;
+                health_status JSONB;
+              BEGIN
+                -- Get database size
+                SELECT pg_database_size(current_database()) INTO db_size;
+                
+                -- Get connection stats
+                SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() INTO connection_count;
+                SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND state = 'active' INTO active_queries;
+                
+                -- Get table statistics
+                SELECT jsonb_object_agg(schemaname || '.' || tablename, 
+                  jsonb_build_object(
+                    'size_bytes', pg_total_relation_size(schemaname||'.'||tablename),
+                    'row_count', n_tup_ins - n_tup_del,
+                    'last_vacuum', COALESCE(last_vacuum::text, 'never'),
+                    'last_analyze', COALESCE(last_analyze::text, 'never')
+                  )
+                ) INTO table_stats
+                FROM pg_stat_user_tables 
+                WHERE schemaname = 'public';
+                
+                -- Build health status
+                health_status := jsonb_build_object(
+                  'timestamp', NOW(),
+                  'database_size_bytes', db_size,
+                  'database_size_mb', ROUND(db_size / 1024.0 / 1024.0, 2),
+                  'active_connections', connection_count,
+                  'active_queries', active_queries,
+                  'table_statistics', table_stats,
+                  'status', CASE 
+                    WHEN db_size < 1073741824 AND connection_count < 100 AND active_queries < 10 THEN 'healthy'
+                    WHEN db_size < 5368709120 AND connection_count < 200 AND active_queries < 50 THEN 'warning'
+                    ELSE 'critical'
+                  END
+                );
+                
+                RETURN QUERY SELECT health_status;
+              END;
+              $$;

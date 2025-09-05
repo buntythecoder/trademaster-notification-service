@@ -1,0 +1,104 @@
+databaseChangeLog:
+  - changeSet:
+      id: 1
+      author: trademaster-system
+      changes:
+        - createView:
+            viewName: v_notification_health_summary
+            selectQuery: |
+              SELECT 
+                'notification_service' as service_name,
+                COUNT(CASE WHEN na.action = 'NOTIFICATION_SENT' AND na.status = 'SUCCESS' AND na.created_at > NOW() - INTERVAL '1 hour' THEN 1 END) as successful_last_hour,
+                COUNT(CASE WHEN na.action = 'NOTIFICATION_SENT' AND na.status = 'FAILED' AND na.created_at > NOW() - INTERVAL '1 hour' THEN 1 END) as failed_last_hour,
+                COUNT(CASE WHEN ne.resolved = false AND ne.created_at > NOW() - INTERVAL '24 hours' THEN 1 END) as unresolved_errors_24h,
+                ROUND(AVG(CASE WHEN na.action = 'NOTIFICATION_SENT' AND na.created_at > NOW() - INTERVAL '1 hour' THEN 
+                  EXTRACT(EPOCH FROM (na.created_at - COALESCE((na.metadata->>'start_time')::timestamp with time zone, na.created_at))) * 1000 
+                END), 2) as avg_processing_time_ms,
+                NOW() as last_updated
+              FROM notification_audit_log na
+              LEFT JOIN notification_errors ne ON na.correlation_id = ne.correlation_id
+  - changeSet:
+      id: 2
+      author: trademaster-system
+      changes:
+        - createView:
+            viewName: v_notification_performance_metrics
+            selectQuery: |
+              SELECT 
+                DATE_TRUNC('hour', created_at) as hour,
+                notification_type,
+                status,
+                COUNT(*) as count,
+                ROUND(AVG(CASE WHEN metadata ? 'processing_time_ms' THEN 
+                  (metadata->>'processing_time_ms')::numeric 
+                END), 2) as avg_processing_time_ms,
+                ROUND(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY 
+                  CASE WHEN metadata ? 'processing_time_ms' THEN 
+                    (metadata->>'processing_time_ms')::numeric 
+                  END), 2) as p95_processing_time_ms,
+                COUNT(CASE WHEN status = 'SUCCESS' THEN 1 END) * 100.0 / COUNT(*) as success_rate_percent
+              FROM notification_audit_log 
+              WHERE action = 'NOTIFICATION_SENT' 
+                AND created_at >= NOW() - INTERVAL '24 hours'
+              GROUP BY DATE_TRUNC('hour', created_at), notification_type, status
+              ORDER BY hour DESC, notification_type, status
+  - changeSet:
+      id: 3
+      author: trademaster-system
+      changes:
+        - createView:
+            viewName: v_error_analysis
+            selectQuery: |
+              SELECT 
+                error_type,
+                error_code,
+                COUNT(*) as error_count,
+                COUNT(CASE WHEN resolved = true THEN 1 END) as resolved_count,
+                COUNT(CASE WHEN resolved = false THEN 1 END) as unresolved_count,
+                ROUND(COUNT(CASE WHEN resolved = true THEN 1 END) * 100.0 / COUNT(*), 2) as resolution_rate_percent,
+                MAX(created_at) as latest_occurrence,
+                MIN(created_at) as first_occurrence,
+                ROUND(AVG(retry_count), 2) as avg_retry_count
+              FROM notification_errors 
+              WHERE created_at >= NOW() - INTERVAL '7 days'
+              GROUP BY error_type, error_code
+              ORDER BY error_count DESC, latest_occurrence DESC
+  - changeSet:
+      id: 4
+      author: trademaster-system
+      changes:
+        - createView:
+            viewName: v_notification_queue_stats
+            selectQuery: |
+              SELECT 
+                'kafka_queue' as queue_type,
+                COALESCE(SUM(CASE WHEN nm.metric_name = 'notification_queue_depth' THEN nm.metric_value END), 0) as current_depth,
+                COALESCE(AVG(CASE WHEN nm.metric_name = 'notification_processing_rate' THEN nm.metric_value END), 0) as processing_rate_per_sec,
+                COALESCE(MAX(CASE WHEN nm.metric_name = 'notification_queue_depth' THEN nm.metric_value END), 0) as max_depth_last_hour,
+                COUNT(CASE WHEN na.action = 'NOTIFICATION_QUEUED' AND na.created_at > NOW() - INTERVAL '1 hour' THEN 1 END) as queued_last_hour,
+                COUNT(CASE WHEN na.action = 'NOTIFICATION_PROCESSED' AND na.created_at > NOW() - INTERVAL '1 hour' THEN 1 END) as processed_last_hour
+              FROM notification_metrics nm
+              CROSS JOIN notification_audit_log na
+              WHERE nm.timestamp >= NOW() - INTERVAL '1 hour'
+                AND na.created_at >= NOW() - INTERVAL '1 hour'
+  - changeSet:
+      id: 5
+      author: trademaster-system
+      changes:
+        - createView:
+            viewName: v_circuit_breaker_status
+            selectQuery: |
+              SELECT 
+                service_instance,
+                tags->>'circuit_breaker_name' as circuit_breaker_name,
+                tags->>'state' as current_state,
+                MAX(timestamp) as last_state_change,
+                COUNT(CASE WHEN tags->>'state' = 'OPEN' THEN 1 END) as open_count_24h,
+                COUNT(CASE WHEN tags->>'state' = 'HALF_OPEN' THEN 1 END) as half_open_count_24h,
+                COUNT(CASE WHEN tags->>'state' = 'CLOSED' THEN 1 END) as closed_count_24h
+              FROM notification_metrics 
+              WHERE metric_name = 'circuit_breaker_state_change'
+                AND timestamp >= NOW() - INTERVAL '24 hours'
+                AND tags ? 'circuit_breaker_name'
+              GROUP BY service_instance, tags->>'circuit_breaker_name', tags->>'state'
+              ORDER BY service_instance, circuit_breaker_name, last_state_change DESC

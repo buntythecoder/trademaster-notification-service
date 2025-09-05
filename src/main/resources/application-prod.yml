@@ -1,0 +1,306 @@
+# Production Configuration for TradeMaster Notification Service
+# MANDATORY: Production Readiness per TradeMaster Standards
+
+server:
+  port: 8084
+  # SSL/TLS Configuration for Production
+  ssl:
+    enabled: ${SSL_ENABLED:true}
+    key-store: ${SSL_KEYSTORE_PATH:/etc/ssl/certs/notification-service.p12}
+    key-store-password: ${SSL_KEYSTORE_PASSWORD:}
+    key-store-type: PKCS12
+    key-alias: notification-service
+    trust-store: ${SSL_TRUSTSTORE_PATH:/etc/ssl/certs/ca-trust.p12}
+    trust-store-password: ${SSL_TRUSTSTORE_PASSWORD:}
+    trust-store-type: PKCS12
+    # Modern TLS configuration
+    enabled-protocols: TLSv1.3,TLSv1.2
+    ciphers: TLS_AES_256_GCM_SHA384,TLS_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+    protocol: TLS
+  # HTTP/2 Support
+  http2:
+    enabled: true
+  # Compression
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
+    min-response-size: 1024
+  # Connection timeout settings
+  tomcat:
+    connection-timeout: 20000
+    max-connections: 8192
+    threads:
+      max: 200
+      min-spare: 10
+    accept-count: 100
+    max-http-form-post-size: 2MB
+    max-swallow-size: 2MB
+
+spring:
+  # DataSource Configuration for Production
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://postgres:5432/trademaster_notifications}
+    username: ${DATABASE_USERNAME:trademaster}
+    password: ${DATABASE_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 60000
+      pool-name: NotificationServiceHikariCP
+
+  # JPA Configuration for Production
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+        jdbc:
+          batch_size: 25
+        order_inserts: true
+        order_updates: true
+        connection:
+          handling_mode: delayed_acquisition_and_release_after_transaction
+
+  # Redis Configuration for Production
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+      ssl: ${REDIS_SSL_ENABLED:false}
+      lettuce:
+        pool:
+          max-active: 10
+          max-idle: 8
+          min-idle: 2
+          max-wait: -1ms
+        shutdown-timeout: 100ms
+
+  # Kafka Configuration for Production
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+    security:
+      protocol: ${KAFKA_SECURITY_PROTOCOL:PLAINTEXT}
+    ssl:
+      key-store-location: ${KAFKA_SSL_KEYSTORE_LOCATION:}
+      key-store-password: ${KAFKA_SSL_KEYSTORE_PASSWORD:}
+      trust-store-location: ${KAFKA_SSL_TRUSTSTORE_LOCATION:}
+      trust-store-password: ${KAFKA_SSL_TRUSTSTORE_PASSWORD:}
+    consumer:
+      group-id: notification-service-prod
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.trademaster.*"
+      max-poll-records: 500
+      fetch-min-size: 1
+      fetch-max-wait: 500ms
+      session-timeout-ms: 30000
+      heartbeat-interval-ms: 10000
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 2147483647
+      batch-size: 16384
+      linger-ms: 5
+      buffer-memory: 33554432
+      compression-type: gzip
+
+  # Mail Configuration for Production
+  mail:
+    host: ${SMTP_HOST:smtp.sendgrid.net}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          ssl:
+            trust: ${SMTP_HOST:smtp.sendgrid.net}
+          connectiontimeout: 10000
+          timeout: 10000
+          writetimeout: 10000
+
+# Eureka Configuration for Production
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICE_URL:http://eureka-server:8761/eureka}
+    register-with-eureka: true
+    fetch-registry: true
+    healthcheck:
+      enabled: true
+    registry-fetch-interval-seconds: 30
+    instance-info-replication-interval-seconds: 30
+    eureka-server-connect-timeout-seconds: 10
+    eureka-server-read-timeout-seconds: 10
+  instance:
+    hostname: ${HOSTNAME:notification-service}
+    instance-id: ${spring.application.name}:${spring.profiles.active}:${random.value}
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+    metadata-map:
+      management:
+        context-path: ${management.server.servlet.context-path:/actuator}
+      health:
+        path: ${management.endpoints.web.base-path:/actuator}/health
+      zone: ${AVAILABILITY_ZONE:zone1}
+      version: ${project.version:2.0.0}
+      startup: ${random.int}
+      management.port: ${management.server.port:8084}
+
+# Production Notification Configuration
+notification:
+  email:
+    enabled: true
+    templates-path: classpath:templates/email/
+    default-sender: ${NOTIFICATION_EMAIL_SENDER:noreply@trademaster.com}
+    retry:
+      max-attempts: 3
+      backoff-delay: 5000
+    rate-limit:
+      requests-per-minute: 500
+      requests-per-hour: 10000
+      requests-per-day: 50000
+  sms:
+    enabled: true
+    retry:
+      max-attempts: 3
+      backoff-delay: 5000
+    rate-limit:
+      requests-per-minute: 50
+      requests-per-hour: 500
+      requests-per-day: 2000
+  push:
+    enabled: true
+    retry:
+      max-attempts: 2
+      backoff-delay: 3000
+  inapp:
+    enabled: true
+    websocket-path: /ws/notifications
+    max-connections: 10000
+
+# Production Twilio Configuration
+twilio:
+  account-sid: ${TWILIO_ACCOUNT_SID:}
+  auth-token: ${TWILIO_AUTH_TOKEN:}
+  phone-number: ${TWILIO_PHONE_NUMBER:}
+
+# Production Resilience Configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      emailService:
+        failure-rate-threshold: 30
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        wait-duration-in-open-state: 120s
+        permitted-number-of-calls-in-half-open-state: 5
+        automatic-transition-from-open-to-half-open-enabled: true
+      smsService:
+        failure-rate-threshold: 25
+        sliding-window-size: 15
+        minimum-number-of-calls: 8
+        wait-duration-in-open-state: 180s
+        permitted-number-of-calls-in-half-open-state: 3
+      pushService:
+        failure-rate-threshold: 40
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        wait-duration-in-open-state: 90s
+  retry:
+    instances:
+      emailService:
+        max-attempts: 4
+        wait-duration: 2s
+        exponential-backoff-multiplier: 2
+      smsService:
+        max-attempts: 3
+        wait-duration: 1s
+        exponential-backoff-multiplier: 1.5
+  timelimiter:
+    instances:
+      emailService:
+        timeout-duration: 30s
+      smsService:
+        timeout-duration: 15s
+      pushService:
+        timeout-duration: 10s
+
+# Production Management Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+      show-components: when-authorized
+      probes:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+  server:
+    port: ${MANAGEMENT_PORT:8084}
+    ssl:
+      enabled: ${SSL_ENABLED:true}
+      key-store: ${SSL_KEYSTORE_PATH:/etc/ssl/certs/notification-service.p12}
+      key-store-password: ${SSL_KEYSTORE_PASSWORD:}
+
+# Production Logging Configuration
+logging:
+  level:
+    com.trademaster: INFO
+    org.springframework.security: WARN
+    org.springframework.kafka: WARN
+    org.springframework.mail: WARN
+    org.hibernate.SQL: WARN
+    io.github.resilience4j: INFO
+  pattern:
+    console: "%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(%5p) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n%wEx"
+  file:
+    name: /var/log/notification-service/application.log
+    max-size: 100MB
+    max-history: 30
+    total-size-cap: 1GB
+
+# Production-specific Application Properties
+app:
+  notification:
+    webhook-base-url: ${WEBHOOK_BASE_URL:https://api.trademaster.com}/api/v1/webhooks
+    frontend-base-url: ${FRONTEND_BASE_URL:https://app.trademaster.com}
+    support-email: ${SUPPORT_EMAIL:support@trademaster.com}
+  
+  audit:
+    enabled: true
+    retention-days: 2555  # 7 years for compliance
+
+# Load Balancer Health Check Configuration
+# These endpoints will be used by load balancers (ALB/NLB)
+health-check:
+  endpoints:
+    liveness: /actuator/health/liveness
+    readiness: /actuator/health/readiness
+    deep: /actuator/health
+  timeout: 5s
+  expected-status: 200

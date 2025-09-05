@@ -1,0 +1,81 @@
+spring:
+  application:
+    name: notification-service
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  cloud:
+    config:
+      uri: ${CONFIG_SERVER_URL:http://localhost:8888}
+      fail-fast: false
+      retry:
+        max-attempts: 6
+        initial-interval: 1000
+        max-interval: 2000
+        multiplier: 1.1
+
+# Eureka Service Discovery Configuration
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICE_URL:http://localhost:8761/eureka}
+    register-with-eureka: true
+    fetch-registry: true
+    healthcheck:
+      enabled: true
+    registry-fetch-interval-seconds: 30
+    instance-info-replication-interval-seconds: 30
+  instance:
+    hostname: ${HOSTNAME:localhost}
+    instance-id: ${spring.application.name}:${spring.profiles.active}:${random.value}
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+    metadata-map:
+      management:
+        context-path: ${management.server.servlet.context-path:/actuator}
+      health:
+        path: ${management.endpoints.web.base-path:/actuator}/health
+      status:
+        path: ${management.endpoints.web.base-path:/actuator}/status
+      zone: ${AVAILABILITY_ZONE:zone1}
+      version: ${project.version:1.0.0}
+      startup: ${random.int}
+      management.port: ${management.server.port:8084}
+
+# Management endpoints for service discovery health checks
+management:
+  server:
+    port: 8084
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,eureka,configprops,env
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+      probes:
+        enabled: true
+    eureka:
+      enabled: true
+  health:
+    eureka:
+      enabled: true
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+# Load Balancer Configuration
+spring.cloud.loadbalancer:
+  ribbon:
+    enabled: false
+  retry:
+    enabled: true
+    max-retries-on-same-service-instance: 1
+    max-retries-on-next-service-instance: 1
+  healthcheck:
+    path:
+      default: /actuator/health
+    interval: 25s

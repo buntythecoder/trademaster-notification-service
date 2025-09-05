@@ -1,0 +1,83 @@
+spring:
+  profiles:
+    active: test
+    
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: 
+    
+  h2:
+    console:
+      enabled: true
+      
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    database-platform: org.hibernate.dialect.H2Dialect
+    
+  liquibase:
+    enabled: false
+    
+  kafka:
+    enabled: false
+    
+  mail:
+    # Mock configuration for testing
+    host: localhost
+    port: 587
+    username: test@test.com
+    password: testpass
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+            
+# Notification service test configuration            
+notification:
+  email:
+    enabled: false
+    from-address: "test@trademaster.com"
+    reply-to-address: "noreply@trademaster.com"
+    template:
+      base-url: "http://localhost:8080"
+      
+  sms:
+    enabled: false
+    twilio:
+      account-sid: "test_account_sid"
+      auth-token: "test_auth_token"
+      from-number: "+1234567890"
+      
+  push:
+    enabled: false
+    firebase:
+      server-key: "test_firebase_server_key"
+      
+  rate-limit:
+    email:
+      requests-per-minute: 100
+      burst-capacity: 50
+    sms:
+      requests-per-minute: 50
+      burst-capacity: 25
+      
+  retry:
+    max-attempts: 2
+    delay-seconds: 1
+    multiplier: 1.5
+    
+  circuit-breaker:
+    failure-rate-threshold: 50
+    wait-duration-seconds: 5
+    sliding-window-size: 10
+
+logging:
+  level:
+    com.trademaster: DEBUG
+    org.springframework.mail: DEBUG
+    root: INFO

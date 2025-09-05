@@ -1,0 +1,144 @@
+# TradeMaster Notification Service Prometheus Configuration
+# MANDATORY: Production Monitoring Standards
+# MANDATORY: Log Aggregation Integration
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'trademaster'
+    region: 'us-west-2'
+    environment: 'production'
+
+rule_files:
+  - "notification-service-alerts.yml"
+  - "notification-service-rules.yml"
+
+scrape_configs:
+  # Notification Service Scraping
+  - job_name: 'notification-service'
+    metrics_path: '/actuator/prometheus'
+    scheme: 'https'
+    tls_config:
+      insecure_skip_verify: true
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    static_configs:
+      - targets: ['notification-service:8084']
+        labels:
+          service: 'notification-service'
+          version: '2.0.0'
+          component: 'notification'
+          team: 'platform'
+
+  # Service Health Endpoint
+  - job_name: 'notification-service-health'
+    metrics_path: '/actuator/health'
+    scheme: 'https'
+    tls_config:
+      insecure_skip_verify: true
+    scrape_interval: 60s
+    scrape_timeout: 15s
+    static_configs:
+      - targets: ['notification-service:8084']
+        labels:
+          service: 'notification-service'
+          check_type: 'health'
+
+  # Operational Endpoints
+  - job_name: 'notification-service-ops'
+    metrics_path: '/ops/health'
+    scheme: 'https'
+    tls_config:
+      insecure_skip_verify: true
+    scrape_interval: 60s
+    scrape_timeout: 15s
+    static_configs:
+      - targets: ['notification-service:8084']
+        labels:
+          service: 'notification-service'
+          check_type: 'operational'
+
+  # JVM Metrics
+  - job_name: 'notification-service-jvm'
+    metrics_path: '/actuator/metrics'
+    scheme: 'https'
+    tls_config:
+      insecure_skip_verify: true
+    scrape_interval: 30s
+    params:
+      name: ['jvm.memory.used', 'jvm.gc.pause', 'jvm.threads.live', 'process.cpu.usage']
+    static_configs:
+      - targets: ['notification-service:8084']
+        labels:
+          service: 'notification-service'
+          metrics_type: 'jvm'
+
+  # Database Metrics (if exposed)
+  - job_name: 'notification-postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+        labels:
+          service: 'notification-postgres'
+          database: 'trademaster_notifications'
+
+  # Redis Metrics (if exposed)
+  - job_name: 'notification-redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+        labels:
+          service: 'notification-redis'
+          cache: 'notification'
+
+  # Kafka Metrics (if exposed)
+  - job_name: 'notification-kafka'
+    static_configs:
+      - targets: ['kafka-exporter:9308']
+        labels:
+          service: 'notification-kafka'
+          queue: 'notifications'
+
+  # Log Aggregation Metrics
+  - job_name: 'fluentd'
+    static_configs:
+      - targets: ['fluentd:24231']
+        labels:
+          service: 'fluentd'
+          component: 'log-aggregation'
+
+  - job_name: 'elasticsearch'
+    static_configs:
+      - targets: ['elasticsearch:9200']
+        labels:
+          service: 'elasticsearch'
+          component: 'log-storage'
+
+  # Node Exporter for System Metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+        labels:
+          service: 'node-exporter'
+          component: 'system-metrics'
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - "alertmanager:9093"
+      scheme: http
+      timeout: 10s
+      api_version: v1
+
+# Storage Configuration
+storage:
+  tsdb:
+    path: /prometheus
+    retention.time: 30d
+    retention.size: 10GB
+  
+# Performance Tuning
+query:
+  timeout: 2m
+  max_concurrency: 20
+  max_samples: 50000000

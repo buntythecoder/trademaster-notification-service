@@ -1,0 +1,134 @@
+databaseChangeLog:
+  - changeSet:
+      id: 01-add-notification-history-missing-indexes
+      author: trademaster
+      context: notification-service
+      comment: "Add missing indexes from NotificationHistory entity that were not included in initial migration"
+      changes:
+        - createIndex:
+            indexName: idx_notification_recipient
+            tableName: notification_history
+            columns:
+              - column:
+                  name: recipient
+        - createIndex:
+            indexName: idx_notification_type
+            tableName: notification_history
+            columns:
+              - column:
+                  name: notification_type
+        - createIndex:
+            indexName: idx_notification_status
+            tableName: notification_history
+            columns:
+              - column:
+                  name: status
+        - createIndex:
+            indexName: idx_notification_created
+            tableName: notification_history
+            columns:
+              - column:
+                  name: created_at
+        - createIndex:
+            indexName: idx_notification_correlation
+            tableName: notification_history
+            columns:
+              - column:
+                  name: correlation_id
+
+  - changeSet:
+      id: 02-add-notification-template-missing-indexes
+      author: trademaster
+      context: notification-service
+      comment: "Add missing indexes from NotificationTemplate entity that were not included in initial migration"
+      changes:
+        - createIndex:
+            indexName: idx_template_category
+            tableName: notification_templates
+            columns:
+              - column:
+                  name: category
+        - createIndex:
+            indexName: idx_template_type
+            tableName: notification_templates
+            columns:
+              - column:
+                  name: notification_type
+        - createIndex:
+            indexName: idx_template_active
+            tableName: notification_templates
+            columns:
+              - column:
+                  name: active
+        - createIndex:
+            indexName: idx_template_created
+            tableName: notification_templates
+            columns:
+              - column:
+                  name: created_at
+
+  - changeSet:
+      id: 03-add-user-preferences-missing-indexes
+      author: trademaster
+      context: notification-service
+      comment: "Add missing indexes from UserNotificationPreference entity that were not included in initial migration"
+      changes:
+        - createIndex:
+            indexName: idx_preferences_enabled
+            tableName: user_notification_preferences
+            columns:
+              - column:
+                  name: notifications_enabled
+        - createIndex:
+            indexName: idx_preferences_channel
+            tableName: user_notification_preferences
+            columns:
+              - column:
+                  name: preferred_channel
+        - createIndex:
+            indexName: idx_preferences_created
+            tableName: user_notification_preferences
+            columns:
+              - column:
+                  name: created_at
+
+  - changeSet:
+      id: 04-add-performance-composite-indexes
+      author: trademaster
+      context: notification-service
+      comment: "Add additional composite indexes for common query patterns"
+      changes:
+        - createIndex:
+            indexName: idx_notification_recipient_status
+            tableName: notification_history
+            columns:
+              - column:
+                  name: recipient
+              - column:
+                  name: status
+        - createIndex:
+            indexName: idx_notification_type_status
+            tableName: notification_history
+            columns:
+              - column:
+                  name: notification_type
+              - column:
+                  name: status
+        - createIndex:
+            indexName: idx_template_category_active_type
+            tableName: notification_templates
+            columns:
+              - column:
+                  name: category
+              - column:
+                  name: active
+              - column:
+                  name: notification_type
+        - createIndex:
+            indexName: idx_preferences_enabled_channel
+            tableName: user_notification_preferences
+            columns:
+              - column:
+                  name: notifications_enabled
+              - column:
+                  name: preferred_channel

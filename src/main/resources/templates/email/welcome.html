@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to TradeMaster</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 300;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .welcome-message {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        .features {
+            background-color: #f8f9fa;
+            padding: 30px;
+            margin: 30px 0;
+            border-radius: 8px;
+        }
+        .feature-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .feature-icon {
+            width: 20px;
+            height: 20px;
+            background-color: #28a745;
+            border-radius: 50%;
+            margin-right: 15px;
+            display: inline-block;
+        }
+        .footer {
+            background-color: #333;
+            color: #ccc;
+            padding: 30px;
+            text-align: center;
+            font-size: 14px;
+        }
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Welcome to TradeMaster</h1>
+        </div>
+        
+        <div class="content">
+            <div class="welcome-message">
+                <h2>Hello <span th:text="${firstName}">User</span> <span th:text="${lastName}">Name</span>!</h2>
+                <p>Thank you for joining TradeMaster, the premier platform for intelligent trading and portfolio management.</p>
+            </div>
+            
+            <div class="features">
+                <h3>What you can do with TradeMaster:</h3>
+                <div class="feature-item">
+                    <span class="feature-icon"></span>
+                    <span>Execute trades across multiple brokers with our unified interface</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon"></span>
+                    <span>Monitor your portfolio performance in real-time</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon"></span>
+                    <span>Receive intelligent alerts and notifications</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon"></span>
+                    <span>Access advanced analytics and risk management tools</span>
+                </div>
+            </div>
+            
+            <p>Your account ID: <strong th:text="${userId}">USER_ID</strong></p>
+            
+            <div style="text-align: center; margin: 40px 0;">
+                <a href="#" th:href="${dashboardUrl}" class="cta-button">Access Your Dashboard</a>
+            </div>
+            
+            <p style="color: #666; font-size: 14px; margin-top: 30px;">
+                This email was sent from an automated system. If you have any questions, 
+                please contact our support team.
+            </p>
+        </div>
+        
+        <div class="footer">
+            <p>&copy; 2024 TradeMaster. All rights reserved.</p>
+            <p>
+                <a href="https://app.trademaster.com/privacy">Privacy Policy</a> | 
+                <a href="https://app.trademaster.com/terms">Terms of Service</a> | 
+                <a href="https://app.trademaster.com/support">Support</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

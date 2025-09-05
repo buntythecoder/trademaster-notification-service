@@ -1,0 +1,148 @@
+databaseChangeLog:
+  - changeSet:
+      id: 01-create-notification-templates-table
+      author: trademaster
+      context: notification-service
+      changes:
+        - createTable:
+            tableName: notification_templates
+            columns:
+              - column:
+                  name: template_id
+                  type: VARCHAR(36)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: template_name
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: display_name
+                  type: VARCHAR(200)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: VARCHAR(1000)
+              - column:
+                  name: notification_type
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: category
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: subject_template
+                  type: VARCHAR(500)
+              - column:
+                  name: content_template
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: html_template
+                  type: TEXT
+              - column:
+                  name: version
+                  type: INTEGER
+                  defaultValue: 1
+                  constraints:
+                    nullable: false
+              - column:
+                  name: active
+                  type: BOOLEAN
+                  defaultValue: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: default_priority
+                  type: VARCHAR(20)
+                  defaultValue: 'MEDIUM'
+                  constraints:
+                    nullable: false
+              - column:
+                  name: rate_limit_per_hour
+                  type: INTEGER
+              - column:
+                  name: tags
+                  type: VARCHAR(500)
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_by
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 02-create-template-variables-table
+      author: trademaster
+      context: notification-service
+      changes:
+        - createTable:
+            tableName: template_variables
+            columns:
+              - column:
+                  name: template_id
+                  type: VARCHAR(36)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: variable_name
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: template_variables
+            baseColumnNames: template_id
+            referencedTableName: notification_templates
+            referencedColumnNames: template_id
+            constraintName: fk_template_vars_template
+            onDelete: CASCADE
+
+  - changeSet:
+      id: 03-create-template-optional-variables-table
+      author: trademaster
+      context: notification-service
+      changes:
+        - createTable:
+            tableName: template_optional_variables
+            columns:
+              - column:
+                  name: template_id
+                  type: VARCHAR(36)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: variable_name
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: template_optional_variables
+            baseColumnNames: template_id
+            referencedTableName: notification_templates
+            referencedColumnNames: template_id
+            constraintName: fk_template_opt_vars_template
+            onDelete: CASCADE

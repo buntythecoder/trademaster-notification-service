@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trade Execution Alert</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header.failed {
+            background: linear-gradient(135deg, #dc3545 0%, #e74c3c 100%);
+        }
+        .header.cancelled {
+            background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 300;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .trade-details {
+            background-color: #f8f9fa;
+            border-left: 4px solid #28a745;
+            padding: 25px;
+            margin: 30px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .trade-details.failed {
+            border-left-color: #dc3545;
+        }
+        .trade-details.cancelled {
+            border-left-color: #ffc107;
+        }
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .detail-row:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        .detail-label {
+            font-weight: bold;
+            color: #495057;
+        }
+        .detail-value {
+            color: #333;
+            font-weight: 600;
+        }
+        .status-badge {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .status-executed {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-failed {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .status-cancelled {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        .footer {
+            background-color: #333;
+            color: #ccc;
+            padding: 30px;
+            text-align: center;
+            font-size: 14px;
+        }
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        .total-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #28a745;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header" th:classappend="${status == 'FAILED' ? ' failed' : status == 'CANCELLED' ? ' cancelled' : ''}">
+            <h1>Trade <span th:text="${status}">EXECUTED</span></h1>
+            <p style="margin: 10px 0 0 0; font-size: 16px;">Order ID: <span th:text="${orderId}">ORDER_ID</span></p>
+        </div>
+        
+        <div class="content">
+            <div class="trade-details" th:classappend="${status == 'FAILED' ? ' failed' : status == 'CANCELLED' ? ' cancelled' : ''}">
+                <div class="detail-row">
+                    <span class="detail-label">Status:</span>
+                    <span class="status-badge" 
+                          th:classappend="${status == 'EXECUTED' ? ' status-executed' : status == 'FAILED' ? ' status-failed' : ' status-cancelled'}"
+                          th:text="${status}">EXECUTED</span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Symbol:</span>
+                    <span class="detail-value" th:text="${symbol}">AAPL</span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Quantity:</span>
+                    <span class="detail-value" th:text="${quantity}">100</span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Price per Share:</span>
+                    <span class="detail-value">₹<span th:text="${price}">150.00</span></span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Total Value:</span>
+                    <span class="detail-value total-value">₹<span th:text="${#numbers.formatDecimal(quantity * price, 1, 2)}">15,000.00</span></span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Order ID:</span>
+                    <span class="detail-value" th:text="${orderId}">ORD-123456789</span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Executed At:</span>
+                    <span class="detail-value" th:text="${#temporals.format(#temporals.createNow(), 'MMM dd, yyyy HH:mm:ss')}">Jan 15, 2024 10:30:45</span>
+                </div>
+            </div>
+            
+            <div th:if="${status == 'EXECUTED'}" style="background-color: #e8f5e8; padding: 20px; border-radius: 8px; margin: 30px 0;">
+                <h4 style="color: #28a745; margin: 0 0 10px 0;">✅ Trade Successfully Executed</h4>
+                <p style="margin: 0; color: #155724;">Your order has been successfully executed. The shares have been added to your portfolio.</p>
+            </div>
+            
+            <div th:if="${status == 'FAILED'}" style="background-color: #f8e8e8; padding: 20px; border-radius: 8px; margin: 30px 0;">
+                <h4 style="color: #dc3545; margin: 0 0 10px 0;">❌ Trade Execution Failed</h4>
+                <p style="margin: 0; color: #721c24;">Unfortunately, your order could not be executed. Please check your account balance and market conditions.</p>
+            </div>
+            
+            <div th:if="${status == 'CANCELLED'}" style="background-color: #fff8e8; padding: 20px; border-radius: 8px; margin: 30px 0;">
+                <h4 style="color: #856404; margin: 0 0 10px 0;">⚠️ Trade Cancelled</h4>
+                <p style="margin: 0; color: #856404;">Your order has been cancelled as requested or due to market conditions.</p>
+            </div>
+            
+            <div style="text-align: center; margin: 40px 0;">
+                <a href="#" th:href="${dashboardUrl}" class="cta-button">View Portfolio</a>
+            </div>
+            
+            <p style="color: #666; font-size: 14px; margin-top: 30px;">
+                This is an automated notification from TradeMaster. For questions about this trade, 
+                please contact our support team or check your trading dashboard.
+            </p>
+        </div>
+        
+        <div class="footer">
+            <p>&copy; 2024 TradeMaster. All rights reserved.</p>
+            <p>
+                <a href="https://app.trademaster.com/privacy">Privacy Policy</a> | 
+                <a href="https://app.trademaster.com/terms">Terms of Service</a> | 
+                <a href="https://app.trademaster.com/support">Support</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

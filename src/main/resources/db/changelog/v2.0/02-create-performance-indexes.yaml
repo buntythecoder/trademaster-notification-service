@@ -1,0 +1,124 @@
+databaseChangeLog:
+  - changeSet:
+      id: 1
+      author: trademaster-system
+      changes:
+        - createIndex:
+            tableName: notification_audit_log
+            indexName: idx_audit_correlation_id
+            columns:
+              - column:
+                  name: correlation_id
+        - createIndex:
+            tableName: notification_audit_log
+            indexName: idx_audit_user_id
+            columns:
+              - column:
+                  name: user_id
+        - createIndex:
+            tableName: notification_audit_log
+            indexName: idx_audit_created_at
+            columns:
+              - column:
+                  name: created_at
+                  descending: true
+        - createIndex:
+            tableName: notification_audit_log
+            indexName: idx_audit_action_status
+            columns:
+              - column:
+                  name: action
+              - column:
+                  name: status
+  - changeSet:
+      id: 2
+      author: trademaster-system
+      changes:
+        - createIndex:
+            tableName: notification_metrics
+            indexName: idx_metrics_name_timestamp
+            columns:
+              - column:
+                  name: metric_name
+              - column:
+                  name: timestamp
+                  descending: true
+        - createIndex:
+            tableName: notification_metrics
+            indexName: idx_metrics_timestamp
+            columns:
+              - column:
+                  name: timestamp
+                  descending: true
+        - createIndex:
+            tableName: notification_metrics
+            indexName: idx_metrics_service_instance
+            columns:
+              - column:
+                  name: service_instance
+  - changeSet:
+      id: 3
+      author: trademaster-system
+      changes:
+        - createIndex:
+            tableName: notification_errors
+            indexName: idx_errors_correlation_id
+            columns:
+              - column:
+                  name: correlation_id
+        - createIndex:
+            tableName: notification_errors
+            indexName: idx_errors_type_resolved
+            columns:
+              - column:
+                  name: error_type
+              - column:
+                  name: resolved
+        - createIndex:
+            tableName: notification_errors
+            indexName: idx_errors_created_at
+            columns:
+              - column:
+                  name: created_at
+                  descending: true
+        - createIndex:
+            tableName: notification_errors
+            indexName: idx_errors_notification_id
+            columns:
+              - column:
+                  name: notification_id
+  - changeSet:
+      id: 4
+      author: trademaster-system
+      changes:
+        # Add composite indexes for common query patterns
+        - createIndex:
+            tableName: notification_audit_log
+            indexName: idx_audit_user_action_created
+            columns:
+              - column:
+                  name: user_id
+              - column:
+                  name: action
+              - column:
+                  name: created_at
+                  descending: true
+        - createIndex:
+            tableName: notification_errors
+            indexName: idx_errors_unresolved_recent
+            columns:
+              - column:
+                  name: resolved
+              - column:
+                  name: created_at
+                  descending: true
+            where: "resolved = false"
+  - changeSet:
+      id: 5
+      author: trademaster-system
+      changes:
+        # Add GIN indexes for JSONB columns for better query performance
+        - sql:
+            sql: "CREATE INDEX IF NOT EXISTS idx_audit_metadata_gin ON notification_audit_log USING gin(metadata);"
+        - sql:
+            sql: "CREATE INDEX IF NOT EXISTS idx_metrics_tags_gin ON notification_metrics USING gin(tags);"

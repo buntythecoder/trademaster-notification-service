@@ -1,0 +1,24 @@
+databaseChangeLog:
+  # Version 1.0 - Initial Schema
+  - include:
+      file: db/changelog/v1.0/01-create-notification-tables.yaml
+  - include:
+      file: db/changelog/v1.0/02-create-template-tables.yaml
+  - include:
+      file: db/changelog/v1.0/03-create-preference-tables.yaml
+  - include:
+      file: db/changelog/v1.0/04-create-indexes.yaml
+  - include:
+      file: db/changelog/v1.0/05-insert-default-templates.yaml
+  - include:
+      file: db/changelog/v1.0/06-add-missing-indexes.yaml
+  
+  # Version 2.0 - Production Enhancement
+  - include:
+      file: db/changelog/v2.0/01-create-audit-tables.yaml
+  - include:
+      file: db/changelog/v2.0/02-create-performance-indexes.yaml
+  - include:
+      file: db/changelog/v2.0/03-create-operational-views.yaml
+  - include:
+      file: db/changelog/v2.0/04-create-data-retention-policies.yaml
