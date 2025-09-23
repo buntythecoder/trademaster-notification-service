@@ -129,55 +129,75 @@ public class DatabaseReadinessService implements HealthIndicator {
     }
 
     /**
-     * Check Liquibase migration status
-     * 
+     * Check migration status (Flyway-based with fallback)
+     *
      * MANDATORY: Functional Programming - Rule #3
      */
     private Map<String, Object> checkMigrationStatus() {
         try {
-            // Check if Liquibase tables exist
-            boolean lockTableExists = checkTableExists("databasechangeloglock");
-            boolean changeLogExists = checkTableExists("databasechangelog");
-            
-            if (!lockTableExists || !changeLogExists) {
+            // Check if Flyway schema history table exists
+            boolean schemaHistoryExists = checkTableExists("flyway_schema_history");
+
+            if (schemaHistoryExists) {
+                // Flyway table exists - check its status
+                Integer migrationCount = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM flyway_schema_history",
+                    Integer.class
+                );
+
+                String lastMigration = jdbcTemplate.queryForObject(
+                    "SELECT version FROM flyway_schema_history ORDER BY installed_on DESC LIMIT 1",
+                    String.class
+                );
+
+                Boolean hasFailedMigrations = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) > 0 FROM flyway_schema_history WHERE success = false",
+                    Boolean.class
+                );
+
                 return Map.of(
-                    "migrations_current", false,
-                    "error", "Liquibase tables missing",
-                    "lock_table_exists", lockTableExists,
-                    "changelog_exists", changeLogExists
+                    "migrations_current", !hasFailedMigrations && migrationCount > 0,
+                    "migration_count", migrationCount != null ? migrationCount : 0,
+                    "last_migration", lastMigration != null ? lastMigration : "none",
+                    "has_failures", hasFailedMigrations != null ? hasFailedMigrations : false,
+                    "migration_tool", "flyway",
+                    "schema_history_exists", true
+                );
+            } else {
+                // Flyway table doesn't exist - check if required tables exist as alternative
+                String[] criticalTables = {
+                    "notification_audit_log",
+                    "notification_metrics",
+                    "notification_errors"
+                };
+
+                boolean allCriticalTablesExist = true;
+                for (String table : criticalTables) {
+                    if (!checkTableExists(table)) {
+                        allCriticalTablesExist = false;
+                        break;
+                    }
+                }
+
+                return Map.of(
+                    "migrations_current", allCriticalTablesExist,
+                    "migration_count", 0,
+                    "last_migration", "tables-exist-check",
+                    "has_failures", false,
+                    "migration_tool", "flyway",
+                    "schema_history_exists", false,
+                    "fallback_check", "critical-tables-exist",
+                    "critical_tables_exist", allCriticalTablesExist
                 );
             }
-
-            // Check for pending migrations or locks
-            Integer lockCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM databasechangeloglock WHERE locked = true", 
-                Integer.class
-            );
-            
-            Integer migrationCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM databasechangelog", 
-                Integer.class
-            );
-            
-            String lastMigration = jdbcTemplate.queryForObject(
-                "SELECT id FROM databasechangelog ORDER BY dateexecuted DESC LIMIT 1", 
-                String.class
-            );
-
-            return Map.of(
-                "migrations_current", lockCount == 0,
-                "migration_count", migrationCount != null ? migrationCount : 0,
-                "last_migration", lastMigration != null ? lastMigration : "none",
-                "locked", lockCount != null && lockCount > 0,
-                "lock_count", lockCount != null ? lockCount : 0
-            );
 
         } catch (Exception e) {
             log.warn("Migration status check failed", e);
             return Map.of(
                 "migrations_current", false,
                 "error", e.getMessage(),
-                "error_type", e.getClass().getSimpleName()
+                "error_type", e.getClass().getSimpleName(),
+                "migration_tool", "flyway"
             );
         }
     }

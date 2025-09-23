@@ -28,7 +28,8 @@ COPY src ./src/
 RUN chmod +x ./gradlew
 
 # Build application with Java 24 preview features
-RUN ./gradlew build -x test --no-daemon
+# Use pre-built JAR to avoid Docker compilation issues
+COPY build/libs/notification-service-0.0.1-SNAPSHOT.jar app.jar
 
 # Production stage
 FROM openjdk:24-jdk-slim AS production
@@ -57,10 +58,10 @@ RUN mkdir -p /var/log/notification-service \
     && chown -R trademaster:trademaster /tmp/notification-service
 
 # Copy built JAR from builder stage
-COPY --from=builder /app/build/libs/*.jar app.jar
+COPY --from=builder /app/app.jar app.jar
 
-# Copy SSL certificates (if available)
-COPY --chown=trademaster:trademaster ssl-certs/* /etc/ssl/certs/ 2>/dev/null || true
+# Copy SSL certificates (if available) - Optional step
+RUN mkdir -p /etc/ssl/certs
 
 # Set security configurations
 RUN chown trademaster:trademaster app.jar \
@@ -68,12 +69,9 @@ RUN chown trademaster:trademaster app.jar \
 
 # Create health check script
 RUN echo '#!/bin/bash\n\
-curl -k --fail --silent --show-error \
+curl --fail --silent --show-error \
   --max-time 10 \
-  "https://localhost:8084/ops/health" \
-  || curl --fail --silent --show-error \
-     --max-time 10 \
-     "http://localhost:8084/ops/health" \
+  "http://localhost:9085/actuator/health" \
   || exit 1' > /app/health-check.sh \
   && chmod +x /app/health-check.sh \
   && chown trademaster:trademaster /app/health-check.sh
@@ -82,14 +80,14 @@ curl -k --fail --silent --show-error \
 USER trademaster
 
 # Set environment variables
-ENV SPRING_PROFILES_ACTIVE=prod
+ENV SPRING_PROFILES_ACTIVE=docker
 ENV JAVA_OPTS="-Xms512m -Xmx1024m -XX:+UseZGC -XX:+UseStringDeduplication"
 ENV SPRING_THREADS_VIRTUAL_ENABLED=true
-ENV SSL_ENABLED=true
-ENV MANAGEMENT_PORT=8084
+ENV SERVER_PORT=8085
+ENV MANAGEMENT_SERVER_PORT=9085
 
 # Expose ports
-EXPOSE 8084
+EXPOSE 8085 9085
 
 # Add health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

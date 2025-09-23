@@ -1,0 +1,126 @@
+# MANDATORY: Docker Environment Configuration per TradeMaster Standards
+
+server:
+  port: ${SERVER_PORT:8085}
+
+# MANDATORY: Separate Management Port per TradeMaster Standards
+management:
+  server:
+    port: ${MANAGEMENT_SERVER_PORT:9085}
+
+spring:
+  application:
+    name: notification-service
+
+  # MANDATORY: Docker Database Configuration
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:postgres}:${DB_PORT:5432}/${DB_NAME:trademaster_notifications}
+    username: ${DB_USERNAME:trademaster}
+    password: ${DB_PASSWORD:trademaster123}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+      minimum-idle: ${DB_MIN_IDLE:5}
+      idle-timeout: ${DB_IDLE_TIMEOUT:300000}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT:20000}
+      validation-timeout: ${DB_VALIDATION_TIMEOUT:5000}
+      leak-detection-threshold: ${DB_LEAK_DETECTION:60000}
+
+  # MANDATORY: Consul Service Discovery Configuration
+  cloud:
+    consul:
+      enabled: ${SPRING_CLOUD_CONSUL_ENABLED:true}
+      host: ${CONSUL_HOST:consul}
+      port: ${CONSUL_PORT:8500}
+      discovery:
+        enabled: true
+        prefer-ip-address: true
+        instance-id: ${spring.application.name}:${CONSUL_INSTANCE_HOSTNAME:${HOSTNAME:notification-service}}:${server.port}
+        service-name: ${spring.application.name}
+        hostname: ${CONSUL_INSTANCE_HOSTNAME:${HOSTNAME:notification-service}}
+        port: ${server.port}
+        health-check-path: /api/v2/health
+        health-check-interval: 30s
+        health-check-timeout: 10s
+        health-check-critical-timeout: 60s
+        heartbeat:
+          enabled: true
+          ttl-value: 30
+          ttl-unit: s
+        metadata:
+          version: ${spring.application.version:2.0.0}
+          management-port: ${management.server.port}
+          management-url: http://${CONSUL_INSTANCE_HOSTNAME:${HOSTNAME:notification-service}}:${management.server.port}/actuator
+
+  # MANDATORY: Docker Kafka Configuration
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+    consumer:
+      group-id: ${spring.application.name}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.trademaster.*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+  # MANDATORY: Docker Redis Configuration
+  redis:
+    host: ${REDIS_HOST:redis}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    timeout: 2000ms
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+
+  # MANDATORY: Docker Email Configuration
+  mail:
+    host: ${SMTP_HOST:smtp.gmail.com}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:noreply@trademaster.com}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          ssl:
+            trust: ${SMTP_HOST:smtp.gmail.com}
+
+# MANDATORY: Docker Twilio Configuration
+twilio:
+  account-sid: ${TWILIO_ACCOUNT_SID:}
+  auth-token: ${TWILIO_AUTH_TOKEN:}
+  phone-number: ${TWILIO_PHONE_NUMBER:}
+
+# MANDATORY: Docker Kong Gateway Configuration
+kong:
+  gateway:
+    enabled: ${KONG_GATEWAY_ENABLED:true}
+    admin-url: ${KONG_ADMIN_URL:http://kong:8001}
+    proxy-url: ${KONG_PROXY_URL:http://kong:8000}
+
+# MANDATORY: Docker JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:}
+  expiration: ${JWT_EXPIRATION:86400}
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800}
+  issuer: ${JWT_ISSUER:trademaster-notification-service}
+  audience: ${JWT_AUDIENCE:trademaster-clients}
+
+# MANDATORY: Docker Logging Configuration
+logging:
+  level:
+    com.trademaster: ${LOG_LEVEL_TRADEMASTER:INFO}
+    org.springframework.kafka: ${LOG_LEVEL_KAFKA:WARN}
+    org.springframework.mail: ${LOG_LEVEL_MAIL:INFO}
+    io.github.resilience4j: ${LOG_LEVEL_RESILIENCE:INFO}
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

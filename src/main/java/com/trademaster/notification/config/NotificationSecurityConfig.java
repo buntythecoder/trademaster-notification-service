@@ -1,5 +1,6 @@
 package com.trademaster.notification.config;
 
+import com.trademaster.notification.security.ServiceApiKeyFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -7,10 +8,12 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -30,6 +33,8 @@ import java.util.List;
 @EnableMethodSecurity(prePostEnabled = true)
 @RequiredArgsConstructor
 public class NotificationSecurityConfig {
+
+    private final ServiceApiKeyFilter serviceApiKeyFilter;
     
     /**
      * Security Filter Chain with Zero Trust approach
@@ -39,11 +44,8 @@ public class NotificationSecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
-            // CSRF Configuration
-            .csrf(csrf -> csrf
-                .ignoringRequestMatchers("/api/v1/notifications/webhook/**")
-                .ignoringRequestMatchers("/actuator/**")
-            )
+            // Disable CSRF for stateless API
+            .csrf(AbstractHttpConfigurer::disable)
             
             // CORS Configuration
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -53,28 +55,21 @@ public class NotificationSecurityConfig {
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
             
-            // Authorization Rules - Zero Trust Approach
+            // Authorization Rules - Kong API key authentication for internal endpoints
             .authorizeHttpRequests(authz -> authz
-                // Health and Metrics - Public access
+                // Public endpoints for health monitoring
                 .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                .requestMatchers("/actuator/**").hasRole("ACTUATOR")
-                
-                // Webhook endpoints - External service access
-                .requestMatchers("/api/v1/notifications/webhook/**").permitAll()
-                
-                // Template Management - Admin/Manager only
-                .requestMatchers("/api/v1/notification-templates/**").hasAnyRole("ADMIN", "NOTIFICATION_MANAGER")
-                
-                // User Preferences - User or Admin access (method level security applied)
-                .requestMatchers("/api/v1/notification-preferences/**").hasAnyRole("USER", "ADMIN", "NOTIFICATION_MANAGER")
-                
-                // Notification APIs - Service access
-                .requestMatchers("/api/v1/notifications/**").hasAnyRole("SERVICE", "ADMIN")
-                
-                // All other requests must be authenticated
+
+                // Internal API endpoints - handled by ServiceApiKeyFilter
+                .requestMatchers("/api/internal/**").permitAll()
+
+                // All other requests must be authenticated via JWT
                 .anyRequest().authenticated()
             )
             
+            // Add ServiceApiKeyFilter before JWT filter
+            .addFilterBefore(serviceApiKeyFilter, UsernamePasswordAuthenticationFilter.class)
+
             // OAuth2 Resource Server Configuration
             .oauth2ResourceServer(oauth2 -> oauth2
                 .jwt(jwt -> jwt

@@ -66,7 +66,7 @@ public class NotificationHistory {
                     joinColumns = @JoinColumn(name = "notification_id"))
     @MapKeyColumn(name = "variable_key", length = 100)
     @Column(name = "variable_value", length = 1000)
-    private Map<String, Object> templateVariables;
+    private Map<String, String> templateVariables;
     
     @Enumerated(EnumType.STRING)
     @Column(name = "priority", nullable = false, length = 20)
@@ -151,7 +151,7 @@ public class NotificationHistory {
         history.setSubject(request.subject());
         history.setContent(request.content());
         history.setTemplateName(request.templateName());
-        history.setTemplateVariables(request.templateVariables());
+        // Convert Map<String, Object> to Map<String, String> for database storage        Map<String, String> stringVariables = request.templateVariables() != null            ? request.templateVariables().entrySet().stream()                .collect(java.util.stream.Collectors.toMap(                    Map.Entry::getKey,                    entry -> entry.getValue() != null ? entry.getValue().toString() : null))            : null;        history.setTemplateVariables(stringVariables);
         history.setPriority(request.priority());
         history.setStatus(NotificationStatus.PENDING);
         history.setScheduledAt(request.scheduledAt());
