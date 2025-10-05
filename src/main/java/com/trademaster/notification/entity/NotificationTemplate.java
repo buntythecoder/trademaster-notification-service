@@ -56,12 +56,10 @@ public class NotificationTemplate {
     @Column(name = "subject_template", length = 500)
     private String subjectTemplate;
     
-    @Lob
-    @Column(name = "content_template", nullable = false)
+    @Column(name = "content_template", nullable = false, columnDefinition = "TEXT")
     private String contentTemplate;
-    
-    @Lob
-    @Column(name = "html_template")
+
+    @Column(name = "html_template", columnDefinition = "TEXT")
     private String htmlTemplate;
     
     @ElementCollection(fetch = FetchType.EAGER)

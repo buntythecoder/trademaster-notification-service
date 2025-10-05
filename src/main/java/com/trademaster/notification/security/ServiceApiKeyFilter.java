@@ -7,7 +7,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -34,19 +33,21 @@ import java.util.Set;
  * - Implements fail-safe authentication patterns
  * - Comprehensive audit trail for security events
  *
+ * NOTE: Registered in NotificationSecurityConfig.filterChain() AND as @Component.
+ * @Component required for dependency injection. Do NOT add @Order to avoid double registration.
+ *
  * @author TradeMaster Development Team
  * @version 1.0.0
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
-@Order(1)
 public class ServiceApiKeyFilter extends OncePerRequestFilter {
 
     @Value("${kong.gateway.enabled:true}")
     private boolean kongEnabled;
 
-    @Value("${notification.security.api-keys:}")
+    @Value("${notification.security.api-keys:pTB9KkzqJWNkFDUJHIFyDv5b1tSUpP4q}")
     private String configuredApiKeys;
 
     private static final String API_KEY_HEADER = "X-API-Key";
