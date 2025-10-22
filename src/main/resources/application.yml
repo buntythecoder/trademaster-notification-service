@@ -60,15 +60,6 @@ spring:
         import-check:
           enabled: false
 
-    # Cloud Config (managed by Consul)
-    config:
-      enabled: true
-
-    # Config refresh capabilities
-    refresh:
-      enabled: true
-      rate: 30s
-
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:trademaster_notifications}
     username: ${DB_USERNAME:trademaster}

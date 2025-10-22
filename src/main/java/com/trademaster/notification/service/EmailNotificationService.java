@@ -187,14 +187,21 @@ public class EmailNotificationService {
         );
     }
     
+    /**
+     * Process email template with variables
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 2
+     */
     private String processTemplate(String templateName, Map<String, Object> variables) {
         return Result.tryExecute(() -> {
             Context context = new Context();
-            
-            if (variables != null && !variables.isEmpty()) {
-                context.setVariables(variables);
-            }
-            
+
+            Optional.ofNullable(variables)
+                .filter(vars -> !vars.isEmpty())
+                .ifPresent(context::setVariables);
+
             return templateEngine.process(templateName, context);
         }).match(
             content -> content,
@@ -205,12 +212,20 @@ public class EmailNotificationService {
         );
     }
     
+    /**
+     * Handle email result with error checking
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 1
+     */
     private NotificationResponse handleEmailResult(NotificationResponse result, Throwable throwable) {
-        if (throwable != null) {
-            log.error("Email notification error", throwable);
-            return NotificationResponse.failure("EMAIL_ERROR", throwable.getMessage());
-        }
-        return result;
+        return Optional.ofNullable(throwable)
+            .map(error -> {
+                log.error("Email notification error", error);
+                return NotificationResponse.failure("EMAIL_ERROR", error.getMessage());
+            })
+            .orElse(result);
     }
     
     // Factory methods for common email types
@@ -241,25 +256,29 @@ public class EmailNotificationService {
     
     /**
      * Update notification history after send attempt
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, pattern matching)
+     * MANDATORY: Rule #14 - Pattern Matching with switch expression
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 2
      */
     private CompletableFuture<NotificationResponse> updateHistoryAfterSend(
-            NotificationResponse response, 
+            NotificationResponse response,
             String notificationId) {
-        
-        if (response.success()) {
-            return historyService.updateNotificationStatus(
-                    notificationId, 
-                    NotificationStatus.SENT, 
-                    response.deliveryId(), 
+
+        return switch (response.success()) {
+            case true -> historyService.updateNotificationStatus(
+                    notificationId,
+                    NotificationStatus.SENT,
+                    response.deliveryId(),
                     "system")
                 .thenApply(historyResult -> response);
-        } else {
-            return historyService.markNotificationFailed(
-                    notificationId, 
-                    response.message(), 
+            case false -> historyService.markNotificationFailed(
+                    notificationId,
+                    response.message(),
                     "system")
                 .thenApply(historyResult -> response);
-        }
+        };
     }
     
     private enum EmailType {

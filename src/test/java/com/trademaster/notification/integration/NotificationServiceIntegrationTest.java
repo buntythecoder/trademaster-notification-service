@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trademaster.notification.NotificationServiceApplication;
 import com.trademaster.notification.dto.BulkNotificationRequest;
+import com.trademaster.notification.dto.BulkNotificationResponse;
 import com.trademaster.notification.dto.NotificationRequest;
 import com.trademaster.notification.dto.NotificationResponse;
 import com.trademaster.notification.entity.NotificationHistory;
@@ -202,7 +203,7 @@ class NotificationServiceIntegrationTest {
                 .emailRecipient(testEmail)
                 .subject(testSubject)
                 .content(testContent)
-                .priority(NotificationRequest.NotificationPriority.MEDIUM)
+                .priority(NotificationRequest.Priority.MEDIUM)
                 .templateName("welcome")
                 .templateVariables(Map.of(
                     "firstName", "John",
@@ -231,8 +232,8 @@ class NotificationServiceIntegrationTest {
         // And: Verify database persistence
         await().atMost(Duration.ofSeconds(10))
                 .untilAsserted(() -> {
-                    Optional<NotificationHistory> history = 
-                        historyRepository.findByNotificationId(response.notificationId());
+                    Optional<NotificationHistory> history =
+                        historyRepository.findById(response.notificationId());
                     assertThat(history).isPresent();
                     assertThat(history.get().getStatus()).isEqualTo(NotificationHistory.NotificationStatus.SENT);
                 });
@@ -255,24 +256,29 @@ class NotificationServiceIntegrationTest {
     @Test
     @DisplayName("Bulk Notification Processing - Concurrent Virtual Threads")
     void bulkNotificationProcessing_ConcurrentVirtualThreads_ShouldProcessAllNotifications() {
-        // Given: Multiple notification requests
-        List<NotificationRequest> notifications = List.of(
-                createEmailNotification("user1@example.com", "Order Executed", "Your order for AAPL has been executed"),
-                createEmailNotification("user2@example.com", "KYC Approved", "Your KYC verification has been approved"),
-                createEmailNotification("user3@example.com", "Payment Received", "Your payment of $1000 has been received"),
-                createEmailNotification("user4@example.com", "Market Alert", "NIFTY has crossed 18000"),
-                createEmailNotification("user5@example.com", "Portfolio Update", "Your portfolio value has increased by 5%")
+        // Given: Bulk notification request for multiple recipients
+        List<String> recipients = List.of(
+                "user1@example.com",
+                "user2@example.com",
+                "user3@example.com",
+                "user4@example.com",
+                "user5@example.com"
         );
 
         BulkNotificationRequest bulkRequest = BulkNotificationRequest.builder()
-                .notifications(notifications)
-                .priority(NotificationRequest.NotificationPriority.HIGH)
+                .type(NotificationRequest.NotificationType.EMAIL)
+                .recipients(recipients)
+                .subject("Market Alert")
+                .content("NIFTY has crossed 18000 - Your watchlist stocks are trending up!")
+                .priority(NotificationRequest.Priority.HIGH)
+                .referenceType("BULK_MARKET_ALERT")
+                .personalizeContent(false)
                 .build();
 
         // When: Send bulk notifications
         long startTime = System.currentTimeMillis();
         
-        BulkNotificationRequest.BulkNotificationResponse bulkResponse = given()
+        BulkNotificationResponse bulkResponse = given()
                 .contentType(ContentType.JSON)
                 .body(bulkRequest)
                 .auth().basic("admin", "admin123")
@@ -281,7 +287,7 @@ class NotificationServiceIntegrationTest {
                 .then()
                 .statusCode(200)
                 .extract()
-                .as(BulkNotificationRequest.BulkNotificationResponse.class);
+                .as(BulkNotificationResponse.class);
 
         long endTime = System.currentTimeMillis();
         long processingTime = endTime - startTime;
@@ -320,17 +326,28 @@ class NotificationServiceIntegrationTest {
         
         UserNotificationPreference preference = UserNotificationPreference.builder()
                 .userId(userId)
-                .emailEnabled(false) // Email disabled
-                .smsEnabled(true)
-                .pushEnabled(true)
-                .inAppEnabled(true)
+                .notificationsEnabled(true)
+                .preferredChannel(NotificationRequest.NotificationType.SMS)
+                .enabledChannels(Set.of(
+                        NotificationRequest.NotificationType.SMS,
+                        NotificationRequest.NotificationType.PUSH,
+                        NotificationRequest.NotificationType.IN_APP
+                )) // Email disabled
+                .enabledCategories(Set.of(
+                        NotificationTemplate.TemplateCategory.SYSTEM,
+                        NotificationTemplate.TemplateCategory.ACCOUNT
+                ))
+                .systemAlertsEnabled(true)
+                .accountAlertsEnabled(true)
+                .createdBy("test-setup")
+                .updatedBy("test-setup")
                 .build();
-        
+
         preferenceRepository.save(preference);
 
         NotificationRequest emailRequest = createEmailNotification(userEmail, "Test Subject", "Test Content")
                 .toBuilder()
-                .userId(userId)
+                .recipient(userId)
                 .build();
 
         // When: Try to send email notification
@@ -367,14 +384,14 @@ class NotificationServiceIntegrationTest {
      */
     @Test
     @DisplayName("WebSocket Real-time Notifications - Live Updates")
-    void websocketRealTimeNotifications_LiveUpdates_ShouldReceiveNotificationsInRealTime() 
-            throws ExecutionException, InterruptedException {
+    void websocketRealTimeNotifications_LiveUpdates_ShouldReceiveNotificationsInRealTime()
+            throws ExecutionException, InterruptedException, java.util.concurrent.TimeoutException {
         // Given: WebSocket connection
         stompClient = new WebSocketStompClient(new org.springframework.web.socket.client.standard.StandardWebSocketClient());
         stompClient.setMessageConverter(new MappingJackson2MessageConverter());
 
         String websocketUrl = "ws://localhost:" + serverPort + "/ws";
-        StompSession stompSession = stompClient.connect(websocketUrl, new StompSessionHandlerAdapter()).get();
+        StompSession stompSession = stompClient.connect(websocketUrl, new StompSessionHandlerAdapter() {}).get();
 
         // Subscribe to notifications
         AtomicReference<Map<String, Object>> receivedNotification = new AtomicReference<>();
@@ -399,10 +416,10 @@ class NotificationServiceIntegrationTest {
         // When: Send in-app notification
         NotificationRequest inAppRequest = NotificationRequest.builder()
                 .type(NotificationRequest.NotificationType.IN_APP)
-                .userId("user123")
+                .recipient("user123")
                 .subject("Real-time Alert")
                 .content("Your order has been executed successfully!")
-                .priority(NotificationRequest.NotificationPriority.HIGH)
+                .priority(NotificationRequest.Priority.HIGH)
                 .build();
 
         given()
@@ -499,12 +516,12 @@ class NotificationServiceIntegrationTest {
 
         NotificationRequest templatedRequest = NotificationRequest.builder()
                 .type(NotificationRequest.NotificationType.EMAIL)
-                .userId(userId)
+                .recipient(userId)
                 .emailRecipient("alice.johnson@example.com")
                 .subject("Portfolio Performance Update")
                 .templateName("portfolio-update")
                 .templateVariables(templateVariables)
-                .priority(NotificationRequest.NotificationPriority.MEDIUM)
+                .priority(NotificationRequest.Priority.MEDIUM)
                 .build();
 
         // When: Send templated notification
@@ -547,27 +564,39 @@ class NotificationServiceIntegrationTest {
     private void setupTestTemplates() {
         List<NotificationTemplate> templates = List.of(
                 NotificationTemplate.builder()
-                        .name("welcome")
-                        .type("EMAIL")
-                        .subject("Welcome to TradeMaster, {{firstName}}!")
-                        .content("<html><body><h1>Welcome {{firstName}} {{lastName}}!</h1>" +
+                        .templateName("welcome")
+                        .displayName("Welcome Template")
+                        .notificationType(NotificationRequest.NotificationType.EMAIL)
+                        .category(NotificationTemplate.TemplateCategory.WELCOME)
+                        .subjectTemplate("Welcome to TradeMaster, {{firstName}}!")
+                        .contentTemplate("<html><body><h1>Welcome {{firstName}} {{lastName}}!</h1>" +
                                 "<p>Your trading account is ready.</p>" +
                                 "<a href='{{dashboardUrl}}'>Access Dashboard</a></body></html>")
+                        .version(1)
                         .active(true)
+                        .defaultPriority(NotificationRequest.Priority.MEDIUM)
+                        .createdBy("test-setup")
+                        .updatedBy("test-setup")
                         .build(),
-                
+
                 NotificationTemplate.builder()
-                        .name("portfolio-update")
-                        .type("EMAIL")
-                        .subject("Portfolio Performance Update")
-                        .content("<html><body><h1>Hello {{firstName}} {{lastName}}</h1>" +
+                        .templateName("portfolio-update")
+                        .displayName("Portfolio Update Template")
+                        .notificationType(NotificationRequest.NotificationType.EMAIL)
+                        .category(NotificationTemplate.TemplateCategory.TRADING)
+                        .subjectTemplate("Portfolio Performance Update")
+                        .contentTemplate("<html><body><h1>Hello {{firstName}} {{lastName}}</h1>" +
                                 "<p>Your current account balance: {{accountBalance}}</p>" +
                                 "<p>Portfolio gain: {{portfolioGain}}</p>" +
                                 "<a href='{{dashboardUrl}}'>View Dashboard</a></body></html>")
+                        .version(1)
                         .active(true)
+                        .defaultPriority(NotificationRequest.Priority.MEDIUM)
+                        .createdBy("test-setup")
+                        .updatedBy("test-setup")
                         .build()
         );
-        
+
         templateRepository.saveAll(templates);
     }
 
@@ -575,21 +604,46 @@ class NotificationServiceIntegrationTest {
         List<UserNotificationPreference> preferences = List.of(
                 UserNotificationPreference.builder()
                         .userId("test-user-1")
-                        .emailEnabled(true)
-                        .smsEnabled(true)
-                        .pushEnabled(true)
-                        .inAppEnabled(true)
+                        .notificationsEnabled(true)
+                        .preferredChannel(NotificationRequest.NotificationType.EMAIL)
+                        .enabledChannels(Set.of(
+                                NotificationRequest.NotificationType.EMAIL,
+                                NotificationRequest.NotificationType.SMS,
+                                NotificationRequest.NotificationType.PUSH,
+                                NotificationRequest.NotificationType.IN_APP
+                        ))
+                        .enabledCategories(Set.of(
+                                NotificationTemplate.TemplateCategory.SYSTEM,
+                                NotificationTemplate.TemplateCategory.TRADING,
+                                NotificationTemplate.TemplateCategory.ACCOUNT
+                        ))
+                        .systemAlertsEnabled(true)
+                        .tradingAlertsEnabled(true)
+                        .accountAlertsEnabled(true)
+                        .createdBy("test-setup")
+                        .updatedBy("test-setup")
                         .build(),
-                
+
                 UserNotificationPreference.builder()
                         .userId("test-user-2")
-                        .emailEnabled(false)
-                        .smsEnabled(true)
-                        .pushEnabled(false)
-                        .inAppEnabled(true)
+                        .notificationsEnabled(true)
+                        .preferredChannel(NotificationRequest.NotificationType.SMS)
+                        .enabledChannels(Set.of(
+                                NotificationRequest.NotificationType.SMS,
+                                NotificationRequest.NotificationType.IN_APP
+                        ))
+                        .enabledCategories(Set.of(
+                                NotificationTemplate.TemplateCategory.SYSTEM,
+                                NotificationTemplate.TemplateCategory.ACCOUNT
+                        ))
+                        .systemAlertsEnabled(true)
+                        .tradingAlertsEnabled(false)
+                        .accountAlertsEnabled(true)
+                        .createdBy("test-setup")
+                        .updatedBy("test-setup")
                         .build()
         );
-        
+
         preferenceRepository.saveAll(preferences);
     }
 
@@ -629,7 +683,7 @@ class NotificationServiceIntegrationTest {
                 .emailRecipient(email)
                 .subject(subject)
                 .content(content)
-                .priority(NotificationRequest.NotificationPriority.MEDIUM)
+                .priority(NotificationRequest.Priority.MEDIUM)
                 .build();
     }
 

@@ -71,18 +71,18 @@ public class NotificationTemplateService implements INotificationTemplateService
             String createdBy) {
         
         return Result.tryExecute(() -> {
-            // Check if template name already exists
-            if (templateRepository.existsByTemplateName(templateName)) {
-                throw new IllegalArgumentException("Template with name '" + templateName + "' already exists");
-            }
-            
+            // Rule #3: NO if-else, use Optional.filter() for validation
+            Optional.of(templateRepository.existsByTemplateName(templateName))
+                .filter(exists -> !exists)
+                .orElseThrow(() -> new IllegalArgumentException("Template with name '" + templateName + "' already exists"));
+
             NotificationTemplate template = NotificationTemplate.create(
                 templateName, displayName, description, notificationType,
                 category, subjectTemplate, contentTemplate, createdBy);
-            
+
             NotificationTemplate saved = templateRepository.save(template);
-            
-            log.info("Template created: ID={}, name={}, category={}", 
+
+            log.info("Template created: ID={}, name={}, category={}",
                     saved.getTemplateId(), saved.getTemplateName(), saved.getCategory());
             
             return saved;
@@ -360,29 +360,39 @@ public class NotificationTemplateService implements INotificationTemplateService
     
     /**
      * Generic result handler for template operations
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 1
      */
     private Result<NotificationTemplate, String> handleTemplateResult(
-            Result<NotificationTemplate, String> result, 
+            Result<NotificationTemplate, String> result,
             Throwable throwable) {
-        
-        if (throwable != null) {
-            log.error("Template operation error", throwable);
-            return Result.failure("Template operation failed: " + throwable.getMessage());
-        }
-        return result;
+
+        return Optional.ofNullable(throwable)
+            .map(error -> {
+                log.error("Template operation error", error);
+                return Result.<NotificationTemplate, String>failure("Template operation failed: " + error.getMessage());
+            })
+            .orElse(result);
     }
     
     /**
      * Generic result handler for integer operations
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 1
      */
     private Result<Integer, String> handleIntegerResult(
-            Result<Integer, String> result, 
+            Result<Integer, String> result,
             Throwable throwable) {
-        
-        if (throwable != null) {
-            log.error("Template batch operation error", throwable);
-            return Result.failure("Batch operation failed: " + throwable.getMessage());
-        }
-        return result;
+
+        return Optional.ofNullable(throwable)
+            .map(error -> {
+                log.error("Template batch operation error", error);
+                return Result.<Integer, String>failure("Batch operation failed: " + error.getMessage());
+            })
+            .orElse(result);
     }
 }

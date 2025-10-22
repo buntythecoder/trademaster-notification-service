@@ -116,12 +116,39 @@ public interface NotificationHistoryRepository extends JpaRepository<Notificatio
      * Get delivery statistics for reporting
      */
     @Query("""
-           SELECT n.status, COUNT(n) 
-           FROM NotificationHistory n 
-           WHERE n.createdAt BETWEEN :startDate AND :endDate 
+           SELECT n.status, COUNT(n)
+           FROM NotificationHistory n
+           WHERE n.createdAt BETWEEN :startDate AND :endDate
            GROUP BY n.status
            """)
     List<Object[]> getDeliveryStatistics(
-            @Param("startDate") LocalDateTime startDate, 
+            @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate);
+
+    /**
+     * Find notifications by user with optional type and status filters
+     *
+     * MANDATORY: Rule #3 - Functional Programming (JPQL with conditionals)
+     * MANDATORY: Rule #16 - Dynamic Configuration (supports optional filters)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 1
+     *
+     * @param recipient User ID to filter by (required)
+     * @param type Notification type filter (optional - pass null to ignore)
+     * @param status Notification status filter (optional - pass null to ignore)
+     * @param pageable Pagination parameters
+     * @return Page of notification history matching filters
+     */
+    @Query("""
+           SELECT n FROM NotificationHistory n
+           WHERE n.recipient = :recipient
+           AND (:type IS NULL OR n.type = :type)
+           AND (:status IS NULL OR n.status = :status)
+           ORDER BY n.createdAt DESC
+           """)
+    Page<NotificationHistory> findByRecipientWithOptionalFilters(
+            @Param("recipient") String recipient,
+            @Param("type") NotificationRequest.NotificationType type,
+            @Param("status") NotificationStatus status,
+            Pageable pageable);
 }

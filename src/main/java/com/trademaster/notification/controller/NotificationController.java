@@ -3,7 +3,10 @@ package com.trademaster.notification.controller;
 import com.trademaster.notification.dto.NotificationRequest;
 import com.trademaster.notification.dto.NotificationResponse;
 import com.trademaster.notification.dto.BulkNotificationRequest;
+import com.trademaster.notification.entity.NotificationHistory;
+import com.trademaster.notification.entity.NotificationHistory.NotificationStatus;
 import com.trademaster.notification.service.NotificationService;
+import com.trademaster.notification.service.NotificationHistoryService;
 import com.trademaster.notification.constant.NotificationConstants;
 import com.trademaster.notification.security.SecurityFacade;
 import com.trademaster.notification.security.SecurityError;
@@ -12,11 +15,16 @@ import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -32,8 +40,9 @@ import java.util.concurrent.CompletableFuture;
 @RequiredArgsConstructor
 @Slf4j
 public class NotificationController {
-    
+
     private final NotificationService notificationService;
+    private final NotificationHistoryService notificationHistoryService;
     private final SecurityFacade securityFacade;
     
     /**
@@ -152,7 +161,57 @@ public class NotificationController {
         
         return sendNotification(request, httpRequest);
     }
-    
+
+    /**
+     * Get user notification history with optional filters
+     *
+     * MANDATORY: Zero Trust Security - Rule #6
+     * MANDATORY: Virtual Threads - Rule #12
+     * MANDATORY: Functional Programming - Rule #3
+     * MANDATORY: Pattern Matching - Rule #14
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 4
+     *
+     * @param userId User ID to get notifications for
+     * @param type Optional notification type filter
+     * @param status Optional notification status filter
+     * @param pageable Pagination parameters (default size: 20)
+     * @param httpRequest HTTP request for security context
+     * @return CompletableFuture with paginated notification history
+     */
+    @GetMapping("/users/{userId}/notifications")
+    @PreAuthorize("authentication.name == #userId or hasRole('ADMIN')")
+    public CompletableFuture<ResponseEntity<?>> getUserNotifications(
+            @PathVariable String userId,
+            @RequestParam(required = false) NotificationRequest.NotificationType type,
+            @RequestParam(required = false) NotificationStatus status,
+            @PageableDefault(size = 20) Pageable pageable,
+            HttpServletRequest httpRequest) {
+
+        return securityFacade.secureExternalAccess(
+            httpRequest,
+            "GET_USER_NOTIFICATIONS",
+            () -> notificationHistoryService.getUserNotifications(userId, type, status, pageable)
+                .thenApply(Result::<Page<NotificationHistory>, Exception>success)
+                .exceptionally(ex -> Result.failure((Exception) ex))
+        ).thenApply(result ->
+            result.match(
+                page -> ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "data", page.getContent(),
+                    "pagination", Map.of(
+                        "page", page.getNumber(),
+                        "size", page.getSize(),
+                        "totalElements", page.getTotalElements(),
+                        "totalPages", page.getTotalPages()
+                    )
+                )),
+                securityError -> ResponseEntity.status(getHttpStatus(securityError))
+                    .body(Map.of("success", false, "message", securityError.getMessage()))
+            )
+        );
+    }
+
     /**
      * Health check endpoint (no security required)
      */

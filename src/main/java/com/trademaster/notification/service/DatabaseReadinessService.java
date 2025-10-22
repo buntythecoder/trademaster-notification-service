@@ -57,29 +57,46 @@ public class DatabaseReadinessService implements HealthIndicator {
 
     /**
      * Perform comprehensive database health check
-     * 
-     * MANDATORY: Functional Programming - Rule #3
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 5
      */
     private Health performHealthCheck() {
         try {
-            // Basic connectivity test
-            boolean connected = checkDatabaseConnectivity();
-            if (!connected) {
-                return Health.down()
+            // Rule #3: NO if-else, use Optional.orElseGet() for conditional logic
+            return java.util.Optional.of(checkDatabaseConnectivity())
+                .filter(Boolean::booleanValue)
+                .map(_ -> performFullHealthCheck())
+                .orElseGet(() -> Health.down()
                     .withDetail("connectivity", "FAILED")
                     .withDetail("timestamp", LocalDateTime.now().toString())
-                    .build();
-            }
+                    .build());
 
+        } catch (Exception e) {
+            log.error("Database health check failed", e);
+            return Health.down()
+                .withDetail("error", e.getMessage())
+                .withDetail("error_type", e.getClass().getSimpleName())
+                .withDetail("timestamp", LocalDateTime.now().toString())
+                .build();
+        }
+    }
+
+    /**
+     * Perform full health check when connectivity is established
+     */
+    private Health performFullHealthCheck() {
+        try {
             // Migration status check
             Map<String, Object> migrationStatus = checkMigrationStatus();
-            
+
             // Performance metrics
             Map<String, Object> performanceMetrics = getPerformanceMetrics();
-            
+
             // Schema validation
             Map<String, Object> schemaValidation = validateDatabaseSchema();
-            
+
             // Connection pool health
             Map<String, Object> connectionPoolHealth = getConnectionPoolHealth();
 
@@ -87,7 +104,7 @@ public class DatabaseReadinessService implements HealthIndicator {
                                (Boolean) schemaValidation.get("schema_valid") &&
                                (Boolean) connectionPoolHealth.get("pool_healthy");
 
-            return allHealthy 
+            return allHealthy
                 ? Health.up()
                     .withDetail("connectivity", "UP")
                     .withDetail("migrations", migrationStatus)
@@ -106,7 +123,7 @@ public class DatabaseReadinessService implements HealthIndicator {
                     .build();
 
         } catch (Exception e) {
-            log.error("Database health check failed", e);
+            log.error("Full health check failed", e);
             return Health.down()
                 .withDetail("error", e.getMessage())
                 .withDetail("error_type", e.getClass().getSimpleName())
@@ -131,65 +148,64 @@ public class DatabaseReadinessService implements HealthIndicator {
     /**
      * Check migration status (Flyway-based with fallback)
      *
-     * MANDATORY: Functional Programming - Rule #3
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #13 - Stream API for collection processing
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 5
      */
     private Map<String, Object> checkMigrationStatus() {
         try {
-            // Check if Flyway schema history table exists
-            boolean schemaHistoryExists = checkTableExists("flyway_schema_history");
+            // Rule #3: NO if-else, use Optional.map().orElseGet() for conditional logic
+            return java.util.Optional.of(checkTableExists("flyway_schema_history"))
+                .filter(Boolean::booleanValue)
+                .map(_ -> {
+                    // Flyway table exists - check its status
+                    Integer migrationCount = jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM flyway_schema_history",
+                        Integer.class
+                    );
 
-            if (schemaHistoryExists) {
-                // Flyway table exists - check its status
-                Integer migrationCount = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM flyway_schema_history",
-                    Integer.class
-                );
+                    String lastMigration = jdbcTemplate.queryForObject(
+                        "SELECT version FROM flyway_schema_history ORDER BY installed_on DESC LIMIT 1",
+                        String.class
+                    );
 
-                String lastMigration = jdbcTemplate.queryForObject(
-                    "SELECT version FROM flyway_schema_history ORDER BY installed_on DESC LIMIT 1",
-                    String.class
-                );
+                    Boolean hasFailedMigrations = jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) > 0 FROM flyway_schema_history WHERE success = false",
+                        Boolean.class
+                    );
 
-                Boolean hasFailedMigrations = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) > 0 FROM flyway_schema_history WHERE success = false",
-                    Boolean.class
-                );
+                    return Map.<String, Object>of(
+                        "migrations_current", !hasFailedMigrations && migrationCount > 0,
+                        "migration_count", migrationCount != null ? migrationCount : 0,
+                        "last_migration", lastMigration != null ? lastMigration : "none",
+                        "has_failures", hasFailedMigrations != null ? hasFailedMigrations : false,
+                        "migration_tool", "flyway",
+                        "schema_history_exists", true
+                    );
+                })
+                .orElseGet(() -> {
+                    // Rule #13: NO for-loop, use Stream API with allMatch
+                    String[] criticalTables = {
+                        "notification_audit_log",
+                        "notification_metrics",
+                        "notification_errors"
+                    };
 
-                return Map.of(
-                    "migrations_current", !hasFailedMigrations && migrationCount > 0,
-                    "migration_count", migrationCount != null ? migrationCount : 0,
-                    "last_migration", lastMigration != null ? lastMigration : "none",
-                    "has_failures", hasFailedMigrations != null ? hasFailedMigrations : false,
-                    "migration_tool", "flyway",
-                    "schema_history_exists", true
-                );
-            } else {
-                // Flyway table doesn't exist - check if required tables exist as alternative
-                String[] criticalTables = {
-                    "notification_audit_log",
-                    "notification_metrics",
-                    "notification_errors"
-                };
+                    boolean allCriticalTablesExist = java.util.Arrays.stream(criticalTables)
+                        .allMatch(this::checkTableExists);
 
-                boolean allCriticalTablesExist = true;
-                for (String table : criticalTables) {
-                    if (!checkTableExists(table)) {
-                        allCriticalTablesExist = false;
-                        break;
-                    }
-                }
-
-                return Map.of(
-                    "migrations_current", allCriticalTablesExist,
-                    "migration_count", 0,
-                    "last_migration", "tables-exist-check",
-                    "has_failures", false,
-                    "migration_tool", "flyway",
-                    "schema_history_exists", false,
-                    "fallback_check", "critical-tables-exist",
-                    "critical_tables_exist", allCriticalTablesExist
-                );
-            }
+                    return Map.<String, Object>of(
+                        "migrations_current", allCriticalTablesExist,
+                        "migration_count", 0,
+                        "last_migration", "tables-exist-check",
+                        "has_failures", false,
+                        "migration_tool", "flyway",
+                        "schema_history_exists", false,
+                        "fallback_check", "critical-tables-exist",
+                        "critical_tables_exist", allCriticalTablesExist
+                    );
+                });
 
         } catch (Exception e) {
             log.warn("Migration status check failed", e);
@@ -245,28 +261,28 @@ public class DatabaseReadinessService implements HealthIndicator {
 
     /**
      * Validate critical database schema elements
-     * 
-     * MANDATORY: Functional Programming - Rule #3
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Stream API)
+     * MANDATORY: Rule #13 - Stream API for collection processing
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 4
      */
     private Map<String, Object> validateDatabaseSchema() {
         try {
             // Check for critical tables
             String[] criticalTables = {
-                "notification_audit_log", 
-                "notification_metrics", 
+                "notification_audit_log",
+                "notification_metrics",
                 "notification_errors"
             };
-            
-            boolean allTablesExist = true;
-            StringBuilder missingTables = new StringBuilder();
-            
-            for (String table : criticalTables) {
-                if (!checkTableExists(table)) {
-                    allTablesExist = false;
-                    if (missingTables.length() > 0) missingTables.append(", ");
-                    missingTables.append(table);
-                }
-            }
+
+            // Rule #13: NO for-loop, use Stream API with allMatch/filter/collect
+            boolean allTablesExist = java.util.Arrays.stream(criticalTables)
+                .allMatch(this::checkTableExists);
+
+            String missingTables = java.util.Arrays.stream(criticalTables)
+                .filter(table -> !checkTableExists(table))
+                .collect(java.util.stream.Collectors.joining(", "));
 
             // Check for critical views
             boolean healthViewExists = checkViewExists("v_notification_health_summary");
@@ -275,7 +291,7 @@ public class DatabaseReadinessService implements HealthIndicator {
             return Map.of(
                 "schema_valid", allTablesExist && healthViewExists && performanceViewExists,
                 "critical_tables_exist", allTablesExist,
-                "missing_tables", missingTables.toString(),
+                "missing_tables", missingTables,
                 "health_view_exists", healthViewExists,
                 "performance_view_exists", performanceViewExists,
                 "schema_version", "2.0"

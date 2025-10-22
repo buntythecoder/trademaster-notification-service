@@ -2,6 +2,8 @@ package com.trademaster.notification.entity;
 
 import com.trademaster.notification.dto.NotificationRequest;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -14,10 +16,11 @@ import java.util.Set;
 
 /**
  * User Notification Preferences Entity
- * 
+ *
  * MANDATORY: JPA Best Practices - Rule #21
  * MANDATORY: User Preference Management - FRONT-020
  * MANDATORY: Functional Programming - Rule #3
+ * MANDATORY: Lombok Standards - Rule #10
  */
 @Entity
 @Table(name = "user_notification_preferences", indexes = {
@@ -29,6 +32,8 @@ import java.util.Set;
 @Getter
 @Setter
 @NoArgsConstructor
+@AllArgsConstructor
+@Builder(toBuilder = true)
 public class UserNotificationPreference {
     
     @Id
@@ -155,63 +160,67 @@ public class UserNotificationPreference {
             NotificationRequest.NotificationType preferredChannel,
             Set<NotificationRequest.NotificationType> enabledChannels,
             String updatedBy) {
-        
-        if (notificationsEnabled != null) {
-            this.setNotificationsEnabled(notificationsEnabled);
-        }
-        if (preferredChannel != null) {
-            this.setPreferredChannel(preferredChannel);
-        }
-        if (enabledChannels != null && !enabledChannels.isEmpty()) {
-            this.setEnabledChannels(enabledChannels);
-        }
+
+        // Rule #3: NO if-else, use Optional.ifPresent() for conditional updates
+        java.util.Optional.ofNullable(notificationsEnabled).ifPresent(this::setNotificationsEnabled);
+        java.util.Optional.ofNullable(preferredChannel).ifPresent(this::setPreferredChannel);
+        java.util.Optional.ofNullable(enabledChannels)
+            .filter(channels -> !channels.isEmpty())
+            .ifPresent(this::setEnabledChannels);
+
         this.setUpdatedBy(updatedBy);
         return this;
     }
     
     /**
      * Check if notification is allowed based on preferences
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, functional chain)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 4
      */
     public boolean isNotificationAllowed(
-            NotificationRequest.NotificationType type, 
+            NotificationRequest.NotificationType type,
             NotificationTemplate.TemplateCategory category) {
-        
-        if (!this.notificationsEnabled) {
-            return false;
-        }
-        
-        if (!this.enabledChannels.contains(type)) {
-            return false;
-        }
-        
-        if (!this.enabledCategories.contains(category)) {
-            return false;
-        }
-        
-        return switch (category) {
-            case MARKETING -> this.marketingEnabled;
-            case SYSTEM -> this.systemAlertsEnabled;
-            case TRADING -> this.tradingAlertsEnabled;
-            case ACCOUNT -> this.accountAlertsEnabled;
-            default -> true;
-        };
+
+        // Rule #3: NO if-else, use functional chain with Optional and filter
+        return java.util.Optional.of(this.notificationsEnabled)
+            .filter(Boolean::booleanValue)
+            .filter(_ -> this.enabledChannels.contains(type))
+            .filter(_ -> this.enabledCategories.contains(category))
+            .map(_ -> switch (category) {
+                case MARKETING -> this.marketingEnabled;
+                case SYSTEM -> this.systemAlertsEnabled;
+                case TRADING -> this.tradingAlertsEnabled;
+                case ACCOUNT -> this.accountAlertsEnabled;
+                default -> true;
+            })
+            .orElse(false);
     }
     
     /**
      * Check if current time is within quiet hours
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, pattern matching)
+     * MANDATORY: Rule #14 - Pattern Matching with switch expression
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 3
      */
     public boolean isWithinQuietHours() {
-        if (!this.quietHoursEnabled || this.quietStartTime == null || this.quietEndTime == null) {
-            return false;
-        }
-        
-        LocalTime now = LocalTime.now();
-        
-        if (this.quietStartTime.isBefore(this.quietEndTime)) {
-            return !now.isBefore(this.quietStartTime) && !now.isAfter(this.quietEndTime);
-        } else {
-            return !now.isAfter(this.quietEndTime) && !now.isBefore(this.quietStartTime);
-        }
+        // Rule #3: NO if-else, use Optional chain with filter and map
+        return java.util.Optional.of(this.quietHoursEnabled)
+            .filter(Boolean::booleanValue)
+            .flatMap(_ -> java.util.Optional.ofNullable(this.quietStartTime))
+            .flatMap(start -> java.util.Optional.ofNullable(this.quietEndTime)
+                .map(end -> {
+                    LocalTime now = LocalTime.now();
+                    // Rule #14: Pattern matching with switch on boolean
+                    return switch (start.isBefore(end)) {
+                        case true -> !now.isBefore(start) && !now.isAfter(end);
+                        case false -> !now.isAfter(end) && !now.isBefore(start);
+                    };
+                }))
+            .orElse(false);
     }
     
     /**

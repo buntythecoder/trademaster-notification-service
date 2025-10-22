@@ -72,28 +72,28 @@ public class NotificationService {
                 bulkRequest.type(), bulkRequest.recipients().size());
         
         return CompletableFuture
-            .supplyAsync(() -> {
-                // Apply rate limiting
-                if (!rateLimitService.isAllowed(bulkRequest.type().toString(), bulkRequest.recipients().size())) {
-                    return List.of(NotificationResponse.failure(
-                        UUID.randomUUID().toString(), 
+            .supplyAsync(() ->
+                // Apply rate limiting (Rule #3 - NO if-else, Optional chain)
+                java.util.Optional.of(rateLimitService.isAllowed(bulkRequest.type().toString(), bulkRequest.recipients().size()))
+                    .filter(Boolean::booleanValue)
+                    .map(allowed -> {
+                        // Convert bulk request to individual requests
+                        List<CompletableFuture<NotificationResponse>> futures = bulkRequest.recipients()
+                            .stream()
+                            .map(recipient -> createIndividualRequest(bulkRequest, recipient))
+                            .map(this::sendNotification)
+                            .toList();
+
+                        // Wait for all notifications to complete
+                        return futures.stream()
+                            .map(CompletableFuture::join)
+                            .toList();
+                    })
+                    .orElseGet(() -> List.of(NotificationResponse.failure(
+                        UUID.randomUUID().toString(),
                         NotificationConstants.RATE_LIMIT_EXCEEDED
-                    ));
-                }
-                
-                // Convert bulk request to individual requests
-                List<CompletableFuture<NotificationResponse>> futures = bulkRequest.recipients()
-                    .stream()
-                    .map(recipient -> createIndividualRequest(bulkRequest, recipient))
-                    .map(this::sendNotification)
-                    .toList();
-                
-                // Wait for all notifications to complete
-                return futures.stream()
-                    .map(CompletableFuture::join)
-                    .toList();
-                    
-            }, Executors.newVirtualThreadPerTaskExecutor());
+                    ))),
+            Executors.newVirtualThreadPerTaskExecutor());
     }
     
     /**
@@ -106,25 +106,23 @@ public class NotificationService {
     }
     
     private CompletableFuture<NotificationResponse> processEmailNotification(NotificationRequest request) {
-        if (!rateLimitService.isAllowed("EMAIL", 1)) {
-            return CompletableFuture.completedFuture(
-                NotificationResponse.failure(UUID.randomUUID().toString(), 
+        return Optional.of(rateLimitService.isAllowed("EMAIL", 1))
+            .filter(Boolean::booleanValue)
+            .map(allowed -> emailService.sendEmail(request))
+            .orElseGet(() -> CompletableFuture.completedFuture(
+                NotificationResponse.failure(UUID.randomUUID().toString(),
                 NotificationConstants.RATE_LIMIT_EXCEEDED)
-            );
-        }
-        
-        return emailService.sendEmail(request);
+            ));
     }
     
     private CompletableFuture<NotificationResponse> processSmsNotification(NotificationRequest request) {
-        if (!rateLimitService.isAllowed("SMS", 1)) {
-            return CompletableFuture.completedFuture(
-                NotificationResponse.failure(UUID.randomUUID().toString(), 
+        return Optional.of(rateLimitService.isAllowed("SMS", 1))
+            .filter(Boolean::booleanValue)
+            .map(allowed -> smsService.sendSms(request))
+            .orElseGet(() -> CompletableFuture.completedFuture(
+                NotificationResponse.failure(UUID.randomUUID().toString(),
                 NotificationConstants.RATE_LIMIT_EXCEEDED)
-            );
-        }
-        
-        return smsService.sendSms(request);
+            ));
     }
     
     private CompletableFuture<NotificationResponse> processPushNotification(NotificationRequest request) {

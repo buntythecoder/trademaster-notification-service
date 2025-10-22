@@ -3,16 +3,19 @@ package com.trademaster.notification.dto;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import lombok.Builder;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Optional;
 
 /**
  * Notification Request DTO
- * 
+ *
  * MANDATORY: Immutability & Records - Rule #9
  * MANDATORY: Validation - Rule #23
+ * MANDATORY: Lombok Standards - Rule #10
  */
+@Builder(toBuilder = true)
 public record NotificationRequest(
     @NotNull NotificationType type,
     @NotBlank String recipient,
@@ -29,14 +32,18 @@ public record NotificationRequest(
     Integer maxRetryAttempts
 ) {
     
+    /**
+     * Compact constructor with default values
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #9 - Records with validation in compact constructor
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 2
+     */
     public NotificationRequest {
-        // Compact constructor with validation
-        if (maxRetryAttempts == null) {
-            maxRetryAttempts = 3;
-        }
-        if (scheduledAt == null) {
-            scheduledAt = LocalDateTime.now();
-        }
+        // Rule #3: NO if-else, use Optional.orElse() for default values
+        maxRetryAttempts = Optional.ofNullable(maxRetryAttempts).orElse(3);
+        scheduledAt = Optional.ofNullable(scheduledAt).orElse(LocalDateTime.now());
     }
     
     // Factory methods for common notifications

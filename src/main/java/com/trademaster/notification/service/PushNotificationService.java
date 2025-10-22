@@ -73,17 +73,25 @@ public class PushNotificationService {
         };
     }
     
+    /**
+     * Validate push notification request
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, functional chain)
+     * MANDATORY: Rule #14 - Pattern Matching (switch expression)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 4
+     */
     private PushValidationResult validatePushRequest(NotificationRequest request) {
-        if (firebaseServerKey.isEmpty() && apnsCertificatePath.isEmpty()) {
-            return PushValidationResult.MISSING_CONFIGURATION;
-        }
-        if (request.recipient() == null || request.recipient().isEmpty()) {
-            return PushValidationResult.INVALID_DEVICE_TOKEN;
-        }
-        if (request.content().length() > 2048) { // Push notification limit
-            return PushValidationResult.CONTENT_TOO_LONG;
-        }
-        return PushValidationResult.VALID;
+        return java.util.Optional.of(firebaseServerKey)
+            .filter(key -> !key.isEmpty() || !apnsCertificatePath.isEmpty())
+            .map(key -> java.util.Optional.ofNullable(request.recipient())
+                .filter(token -> !token.isEmpty())
+                .map(token -> switch (request.content().length() > 2048) {
+                    case true -> PushValidationResult.CONTENT_TOO_LONG;
+                    case false -> PushValidationResult.VALID;
+                })
+                .orElse(PushValidationResult.INVALID_DEVICE_TOKEN))
+            .orElse(PushValidationResult.MISSING_CONFIGURATION);
     }
     
     private NotificationResponse sendPushMessage(NotificationRequest request, String notificationId) {
@@ -103,12 +111,20 @@ public class PushNotificationService {
         );
     }
     
+    /**
+     * Handle push notification result with error checking
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 1
+     */
     private NotificationResponse handlePushResult(NotificationResponse result, Throwable throwable) {
-        if (throwable != null) {
-            log.error("Push notification error", throwable);
-            return NotificationResponse.failure("PUSH_ERROR", throwable.getMessage());
-        }
-        return result;
+        return java.util.Optional.ofNullable(throwable)
+            .map(error -> {
+                log.error("Push notification error", error);
+                return NotificationResponse.failure("PUSH_ERROR", error.getMessage());
+            })
+            .orElse(result);
     }
     
     // Factory methods for common push notification types

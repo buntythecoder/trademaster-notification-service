@@ -56,14 +56,25 @@ public class SmsNotificationService {
     @Value("${twilio.phone-number:+1234567890}")
     private String twilioPhoneNumber;
     
+    /**
+     * Initialize Twilio SMS service
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 2
+     */
     @PostConstruct
     public void init() {
-        if (!accountSid.isEmpty() && !authToken.isEmpty()) {
-            Twilio.init(accountSid, authToken);
-            log.info("Twilio SMS service initialized");
-        } else {
-            log.warn("Twilio credentials not configured - SMS service will be disabled");
-        }
+        java.util.Optional.of(accountSid)
+            .filter(sid -> !sid.isEmpty())
+            .filter(sid -> !authToken.isEmpty())
+            .ifPresentOrElse(
+                sid -> {
+                    Twilio.init(accountSid, authToken);
+                    log.info("Twilio SMS service initialized");
+                },
+                () -> log.warn("Twilio credentials not configured - SMS service will be disabled")
+            );
     }
     
     /**
@@ -140,17 +151,25 @@ public class SmsNotificationService {
         };
     }
     
+    /**
+     * Validate SMS request parameters
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, functional chain)
+     * MANDATORY: Rule #14 - Pattern Matching (switch expression on boolean)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 4
+     */
     private SmsValidationResult validateSmsRequest(NotificationRequest request) {
-        if (accountSid.isEmpty() || authToken.isEmpty()) {
-            return SmsValidationResult.MISSING_CREDENTIALS;
-        }
-        if (request.phoneRecipient() == null || request.phoneRecipient().isEmpty()) {
-            return SmsValidationResult.INVALID_PHONE;
-        }
-        if (request.content().length() > 1600) { // SMS limit
-            return SmsValidationResult.CONTENT_TOO_LONG;
-        }
-        return SmsValidationResult.VALID;
+        return java.util.Optional.of(accountSid)
+            .filter(sid -> !sid.isEmpty() && !authToken.isEmpty())
+            .map(sid -> java.util.Optional.ofNullable(request.phoneRecipient())
+                .filter(phone -> !phone.isEmpty())
+                .map(phone -> switch (request.content().length() <= 1600) {
+                    case true -> SmsValidationResult.VALID;
+                    case false -> SmsValidationResult.CONTENT_TOO_LONG;
+                })
+                .orElse(SmsValidationResult.INVALID_PHONE))
+            .orElse(SmsValidationResult.MISSING_CREDENTIALS);
     }
     
     private NotificationResponse sendSmsMessage(NotificationRequest request, String notificationId) {
@@ -175,35 +194,47 @@ public class SmsNotificationService {
         );
     }
     
+    /**
+     * Handle SMS result with error checking
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 1
+     */
     private NotificationResponse handleSmsResult(NotificationResponse result, Throwable throwable) {
-        if (throwable != null) {
-            log.error("SMS notification error", throwable);
-            return NotificationResponse.failure("SMS_ERROR", throwable.getMessage());
-        }
-        return result;
+        return java.util.Optional.ofNullable(throwable)
+            .map(error -> {
+                log.error("SMS notification error", error);
+                return NotificationResponse.failure("SMS_ERROR", error.getMessage());
+            })
+            .orElse(result);
     }
     
     /**
      * Update notification history after send attempt
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, pattern matching)
+     * MANDATORY: Rule #14 - Pattern Matching with switch expression
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 2
      */
     private CompletableFuture<NotificationResponse> updateHistoryAfterSend(
-            NotificationResponse response, 
+            NotificationResponse response,
             String notificationId) {
-        
-        if (response.success()) {
-            return historyService.updateNotificationStatus(
-                    notificationId, 
-                    NotificationStatus.SENT, 
-                    response.deliveryId(), 
+
+        return switch (response.success()) {
+            case true -> historyService.updateNotificationStatus(
+                    notificationId,
+                    NotificationStatus.SENT,
+                    response.deliveryId(),
                     "system")
                 .thenApply(historyResult -> response);
-        } else {
-            return historyService.markNotificationFailed(
-                    notificationId, 
-                    response.message(), 
+            case false -> historyService.markNotificationFailed(
+                    notificationId,
+                    response.message(),
                     "system")
                 .thenApply(historyResult -> response);
-        }
+        };
     }
     
     // Factory methods for common SMS types

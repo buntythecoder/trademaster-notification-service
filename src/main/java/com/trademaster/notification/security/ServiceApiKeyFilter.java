@@ -63,6 +63,14 @@ public class ServiceApiKeyFilter extends OncePerRequestFilter {
         "/api/v2/health", "/actuator/", "/swagger-ui/", "/v3/api-docs"
     );
 
+    /**
+     * Filter internal processing with functional authentication decision
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, pattern matching)
+     * MANDATORY: Rule #14 - Pattern Matching with switch expressions
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 5
+     */
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
@@ -72,35 +80,35 @@ public class ServiceApiKeyFilter extends OncePerRequestFilter {
         String apiKey = request.getHeader(API_KEY_HEADER);
 
         try {
-            // Skip authentication for public endpoints
-            if (isPublicEndpoint(requestPath)) {
-                log.debug("Allowing public access to: {} - CorrelationId: {}", requestPath, correlationId);
-                addCorrelationIdToResponse(response, correlationId);
-                filterChain.doFilter(request, response);
-                return;
-            }
+            // Rule #3: NO if-else, use pattern matching with switch expression
+            AuthenticationDecision decision = determineAuthenticationDecision(requestPath, apiKey);
 
-            // Check if endpoint requires API key authentication
-            if (isProtectedEndpoint(requestPath)) {
-                if (!kongEnabled) {
+            switch (decision) {
+                case PUBLIC_ENDPOINT -> {
+                    log.debug("Allowing public access to: {} - CorrelationId: {}", requestPath, correlationId);
+                    addCorrelationIdToResponse(response, correlationId);
+                    filterChain.doFilter(request, response);
+                }
+                case KONG_DISABLED -> {
                     log.debug("Kong disabled, skipping API key validation - CorrelationId: {}", correlationId);
                     addCorrelationIdToResponse(response, correlationId);
                     filterChain.doFilter(request, response);
-                    return;
                 }
-
-                if (!isValidApiKey(apiKey)) {
+                case INVALID_API_KEY -> {
                     log.warn("Invalid or missing API key for protected endpoint: {} - CorrelationId: {}",
                             requestPath, correlationId);
                     sendUnauthorizedResponse(response, correlationId, "Invalid or missing API key");
-                    return;
                 }
-
-                log.info("Valid API key authentication for: {} - CorrelationId: {}", requestPath, correlationId);
+                case AUTHENTICATED -> {
+                    log.info("Valid API key authentication for: {} - CorrelationId: {}", requestPath, correlationId);
+                    addCorrelationIdToResponse(response, correlationId);
+                    filterChain.doFilter(request, response);
+                }
+                case UNPROTECTED -> {
+                    addCorrelationIdToResponse(response, correlationId);
+                    filterChain.doFilter(request, response);
+                }
             }
-
-            addCorrelationIdToResponse(response, correlationId);
-            filterChain.doFilter(request, response);
 
         } catch (Exception e) {
             log.error("API key authentication error for: {} - CorrelationId: {}", requestPath, correlationId, e);
@@ -108,13 +116,54 @@ public class ServiceApiKeyFilter extends OncePerRequestFilter {
         }
     }
 
+    /**
+     * Determine authentication decision using functional patterns
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 4
+     */
+    private AuthenticationDecision determineAuthenticationDecision(String requestPath, String apiKey) {
+        // Rule #3: NO if-else, use Optional.orElseGet() for decision logic
+        return java.util.Optional.of(isPublicEndpoint(requestPath))
+            .filter(Boolean::booleanValue)
+            .map(_ -> AuthenticationDecision.PUBLIC_ENDPOINT)
+            .orElseGet(() -> java.util.Optional.of(isProtectedEndpoint(requestPath))
+                .filter(Boolean::booleanValue)
+                .map(_ -> java.util.Optional.of(kongEnabled)
+                    .filter(Boolean::booleanValue)
+                    .map(__ -> java.util.Optional.of(isValidApiKey(apiKey))
+                        .filter(Boolean::booleanValue)
+                        .map(___  -> AuthenticationDecision.AUTHENTICATED)
+                        .orElse(AuthenticationDecision.INVALID_API_KEY))
+                    .orElse(AuthenticationDecision.KONG_DISABLED))
+                .orElse(AuthenticationDecision.UNPROTECTED));
+    }
+
+    /**
+     * Authentication decision enumeration for pattern matching
+     */
+    private enum AuthenticationDecision {
+        PUBLIC_ENDPOINT,
+        KONG_DISABLED,
+        INVALID_API_KEY,
+        AUTHENTICATED,
+        UNPROTECTED
+    }
+
+    /**
+     * Get or generate correlation ID
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 2
+     */
     private String getOrGenerateCorrelationId(HttpServletRequest request) {
-        String correlationId = request.getHeader(CORRELATION_ID_HEADER);
-        if (correlationId == null || correlationId.trim().isEmpty()) {
-            correlationId = "gen-" + System.currentTimeMillis() + "-" +
-                          Integer.toHexString((int) (Math.random() * 0x10000));
-        }
-        return correlationId;
+        // Rule #3: NO if-else, use Optional.orElseGet() for default value generation
+        return java.util.Optional.ofNullable(request.getHeader(CORRELATION_ID_HEADER))
+            .filter(id -> !id.trim().isEmpty())
+            .orElseGet(() -> "gen-" + System.currentTimeMillis() + "-" +
+                            Integer.toHexString((int) (Math.random() * 0x10000)));
     }
 
     private boolean isPublicEndpoint(String path) {
@@ -125,24 +174,24 @@ public class ServiceApiKeyFilter extends OncePerRequestFilter {
         return PROTECTED_PATTERNS.stream().anyMatch(path::startsWith);
     }
 
+    /**
+     * Validate API key
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional + Stream API)
+     * MANDATORY: Rule #13 - Stream API for collection processing
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 4
+     */
     private boolean isValidApiKey(String apiKey) {
-        if (apiKey == null || apiKey.trim().isEmpty()) {
-            return false;
-        }
-
-        // In production, this would validate against a secure key store
-        // For now, check against configured keys
-        if (configuredApiKeys != null && !configuredApiKeys.isEmpty()) {
-            String[] validKeys = configuredApiKeys.split(",");
-            for (String validKey : validKeys) {
-                if (apiKey.trim().equals(validKey.trim())) {
-                    return true;
-                }
-            }
-        }
-
-        // Default validation - in production this should be more sophisticated
-        return apiKey.length() >= 32 && apiKey.matches("^[a-zA-Z0-9-_]+$");
+        // Rule #3: NO if-else, use Optional.map() with Stream API for validation
+        return java.util.Optional.ofNullable(apiKey)
+            .filter(key -> !key.trim().isEmpty())
+            .map(key -> java.util.Optional.ofNullable(configuredApiKeys)
+                .filter(keys -> !keys.isEmpty())
+                .map(keys -> java.util.Arrays.stream(keys.split(","))
+                    .anyMatch(validKey -> key.trim().equals(validKey.trim())))
+                .orElseGet(() -> key.length() >= 32 && key.matches("^[a-zA-Z0-9-_]+$")))
+            .orElse(false);
     }
 
     private void addCorrelationIdToResponse(HttpServletResponse response, String correlationId) {

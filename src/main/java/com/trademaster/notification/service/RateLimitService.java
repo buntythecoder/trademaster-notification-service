@@ -141,21 +141,21 @@ public class RateLimitService {
     
     /**
      * Clean up old rate limit entries
-     * 
-     * MANDATORY: Memory Management - Performance Rule #22
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Stream API)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * MANDATORY: Rule #22 - Memory Management
+     * Complexity: 2
      */
     public void cleanup() {
         LocalDateTime cutoff = LocalDateTime.now().minusHours(2);
-        
+
+        // Remove old window start entries
         windowStarts.entrySet().removeIf(entry -> entry.getValue().isBefore(cutoff));
-        
-        // Remove counters for cleaned up windows
-        windowStarts.keySet().forEach(key -> {
-            if (!windowStarts.containsKey(key)) {
-                windowCounts.remove(key);
-            }
-        });
-        
+
+        // Remove counters for windows that no longer exist (Rule #3 - NO if-else, functional removeIf)
+        windowCounts.keySet().removeIf(key -> !windowStarts.containsKey(key));
+
         log.debug("Cleaned up rate limit entries older than 2 hours");
     }
 }

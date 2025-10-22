@@ -84,10 +84,22 @@ public class InAppNotificationService {
         };
     }
     
+    /**
+     * Validate in-app notification request
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else or ternary, functional chain)
+     * MANDATORY: Rule #14 - Pattern Matching (switch expression)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 3
+     */
     private InAppValidationResult validateInAppRequest(NotificationRequest request) {
-        return (request.recipient() == null || request.recipient().isEmpty()) ? InAppValidationResult.INVALID_USER :
-               (request.content().length() > MAX_IN_APP_CONTENT_LENGTH) ? InAppValidationResult.CONTENT_TOO_LONG :
-               InAppValidationResult.VALID;
+        return java.util.Optional.ofNullable(request.recipient())
+            .filter(recipient -> !recipient.isEmpty())
+            .map(recipient -> switch (request.content().length() > MAX_IN_APP_CONTENT_LENGTH) {
+                case true -> InAppValidationResult.CONTENT_TOO_LONG;
+                case false -> InAppValidationResult.VALID;
+            })
+            .orElse(InAppValidationResult.INVALID_USER);
     }
     
     private NotificationResponse sendInAppMessage(NotificationRequest request, String notificationId) {
@@ -102,15 +114,14 @@ public class InAppNotificationService {
             log.info("In-app notification stored for user: {}, ID: {}", 
                     request.recipient(), notificationId);
             
-            // Send real-time notification via WebSocket
+            // Send real-time notification via WebSocket (Rule #3 - NO if-else, Optional chain)
             webSocketHandler.sendNotificationToUser(request.recipient(), notification)
-                .thenAccept(sent -> {
-                    if (sent) {
-                        log.debug("Real-time notification sent via WebSocket to user: {}", request.recipient());
-                    } else {
-                        log.debug("WebSocket not available for user: {}, notification stored for later", request.recipient());
-                    }
-                })
+                .thenAccept(sent -> java.util.Optional.of(sent)
+                    .filter(Boolean::booleanValue)
+                    .ifPresentOrElse(
+                        success -> log.debug("Real-time notification sent via WebSocket to user: {}", request.recipient()),
+                        () -> log.debug("WebSocket not available for user: {}, notification stored for later", request.recipient())
+                    ))
                 .exceptionally(throwable -> {
                     log.error("Failed to send WebSocket notification to user: {}", request.recipient(), throwable);
                     return null;
@@ -169,12 +180,20 @@ public class InAppNotificationService {
             .size();
     }
     
+    /**
+     * Handle in-app notification result with error checking
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 1
+     */
     private NotificationResponse handleInAppResult(NotificationResponse result, Throwable throwable) {
-        if (throwable != null) {
-            log.error("In-app notification error", throwable);
-            return NotificationResponse.failure("IN_APP_ERROR", throwable.getMessage());
-        }
-        return result;
+        return java.util.Optional.ofNullable(throwable)
+            .map(error -> {
+                log.error("In-app notification error", error);
+                return NotificationResponse.failure("IN_APP_ERROR", error.getMessage());
+            })
+            .orElse(result);
     }
     
     // Factory methods for common in-app notification types
@@ -197,25 +216,29 @@ public class InAppNotificationService {
     
     /**
      * Update notification history after send attempt
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, pattern matching)
+     * MANDATORY: Rule #14 - Pattern Matching with switch expression
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 2
      */
     private CompletableFuture<NotificationResponse> updateHistoryAfterSend(
-            NotificationResponse response, 
+            NotificationResponse response,
             String notificationId) {
-        
-        if (response.success()) {
-            return historyService.updateNotificationStatus(
-                    notificationId, 
-                    NotificationStatus.SENT, 
-                    response.deliveryId(), 
+
+        return switch (response.success()) {
+            case true -> historyService.updateNotificationStatus(
+                    notificationId,
+                    NotificationStatus.SENT,
+                    response.deliveryId(),
                     "system")
                 .thenApply(historyResult -> response);
-        } else {
-            return historyService.markNotificationFailed(
-                    notificationId, 
-                    response.message(), 
+            case false -> historyService.markNotificationFailed(
+                    notificationId,
+                    response.message(),
                     "system")
                 .thenApply(historyResult -> response);
-        }
+        };
     }
     
     private enum InAppValidationResult {

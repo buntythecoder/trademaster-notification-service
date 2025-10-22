@@ -69,28 +69,32 @@ public class RiskAssessmentService {
     
     /**
      * Calculate behavior-based risk
-     * 
-     * MANDATORY: Pattern Matching - Rule #14
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #14 - Pattern Matching with switch
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 3
      */
     private double calculateBehaviorRisk(SecurityContext context) {
         String userId = context.userId();
-        
-        // System users have low behavior risk
-        if ("system".equals(userId)) {
-            return 0.0;
-        }
-        
-        int requestCount = userRequestCounts
-            .computeIfAbsent(userId, k -> new AtomicInteger(0))
-            .get();
-        
-        return switch (requestCount) {
-            case int count when count < 10 -> 0.1;
-            case int count when count < 50 -> 0.2;
-            case int count when count < 100 -> 0.4;
-            case int count when count < 200 -> 0.6;
-            default -> 0.8;
-        };
+
+        // Rule #3: NO if-else, use Optional.orElseGet() for conditional logic
+        return java.util.Optional.of(userId)
+            .filter("system"::equals)
+            .map(_ -> 0.0)
+            .orElseGet(() -> {
+                int requestCount = userRequestCounts
+                    .computeIfAbsent(userId, k -> new AtomicInteger(0))
+                    .get();
+
+                return switch (requestCount) {
+                    case int count when count < 10 -> 0.1;
+                    case int count when count < 50 -> 0.2;
+                    case int count when count < 100 -> 0.4;
+                    case int count when count < 200 -> 0.6;
+                    default -> 0.8;
+                };
+            });
     }
     
     /**
@@ -110,52 +114,60 @@ public class RiskAssessmentService {
     
     /**
      * Calculate time-based risk factors
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #14 - Pattern Matching with switch
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 4
      */
     private double calculateTimeBasedRisk(SecurityContext context) {
         LocalDateTime now = LocalDateTime.now();
         int hour = now.getHour();
-        
-        // Higher risk during off-hours (10 PM - 6 AM)
-        if (hour >= 22 || hour <= 6) {
-            return 0.3;
-        }
-        
-        // Check for rapid successive requests
-        LocalDateTime lastActivity = userLastActivity.get(context.userId());
-        if (lastActivity != null) {
-            long secondsSinceLastActivity = ChronoUnit.SECONDS.between(lastActivity, now);
-            if (secondsSinceLastActivity < 1) {
-                return 0.5; // Very rapid requests
-            } else if (secondsSinceLastActivity < 5) {
-                return 0.3; // Rapid requests
-            }
-        }
-        
-        return 0.1;
+
+        // Rule #3: NO if-else, use Optional.orElseGet() for nested conditional logic
+        return java.util.Optional.of(hour)
+            .filter(h -> h >= 22 || h <= 6)
+            .map(_ -> 0.3)
+            .orElseGet(() -> java.util.Optional.ofNullable(userLastActivity.get(context.userId()))
+                .map(lastActivity -> {
+                    long secondsSinceLastActivity = ChronoUnit.SECONDS.between(lastActivity, now);
+                    return switch ((int) secondsSinceLastActivity) {
+                        case int seconds when seconds < 1 -> 0.5;  // Very rapid requests
+                        case int seconds when seconds < 5 -> 0.3;  // Rapid requests
+                        default -> 0.1;
+                    };
+                })
+                .orElse(0.1));
     }
     
     /**
      * Calculate IP-based risk
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #14 - Pattern Matching with switch
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 3
      */
     private double calculateIpRisk(SecurityContext context) {
         String ipAddress = context.ipAddress();
-        
-        // Local/trusted IPs have lower risk
-        if (ipAddress.startsWith("127.") || ipAddress.startsWith("192.168.") || 
-            ipAddress.startsWith("10.") || ipAddress.equals("localhost")) {
-            return 0.0;
-        }
-        
-        int ipRequestCount = ipRequestCounts
-            .computeIfAbsent(ipAddress, k -> new AtomicInteger(0))
-            .incrementAndGet();
-        
-        return switch (ipRequestCount) {
-            case int count when count < 20 -> 0.1;
-            case int count when count < 100 -> 0.2;
-            case int count when count < 500 -> 0.4;
-            default -> 0.7;
-        };
+
+        // Rule #3: NO if-else, use Optional.orElseGet() for conditional logic
+        return java.util.Optional.of(ipAddress)
+            .filter(ip -> ip.startsWith("127.") || ip.startsWith("192.168.") ||
+                         ip.startsWith("10.") || ip.equals("localhost"))
+            .map(_ -> 0.0)
+            .orElseGet(() -> {
+                int ipRequestCount = ipRequestCounts
+                    .computeIfAbsent(ipAddress, k -> new AtomicInteger(0))
+                    .incrementAndGet();
+
+                return switch (ipRequestCount) {
+                    case int count when count < 20 -> 0.1;
+                    case int count when count < 100 -> 0.2;
+                    case int count when count < 500 -> 0.4;
+                    default -> 0.7;
+                };
+            });
     }
     
     /**

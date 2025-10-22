@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
@@ -101,9 +102,8 @@ public class NotificationHistoryService {
         return historyRepository.findById(notificationId)
             .map(history -> Result.tryExecute(() -> {
                 history.updateStatus(status, updatedBy);
-                if (externalMessageId != null) {
-                    history.setExternalMessageId(externalMessageId);
-                }
+                // Rule #3: NO if-else, use Optional for conditional assignment
+                Optional.ofNullable(externalMessageId).ifPresent(history::setExternalMessageId);
                 return historyRepository.save(history);
             }).mapError(exception -> "Failed to update status: " + exception.getMessage()))
             .orElse(Result.<NotificationHistory, String>failure("Notification not found: " + notificationId));
@@ -141,14 +141,40 @@ public class NotificationHistoryService {
      * Get user notification history with pagination
      */
     public CompletableFuture<Page<NotificationHistory>> getUserNotificationHistory(
-            String recipient, 
+            String recipient,
             Pageable pageable) {
-        
+
         return CompletableFuture
-            .supplyAsync(() -> historyRepository.findByRecipientOrderByCreatedAtDesc(recipient, pageable), 
+            .supplyAsync(() -> historyRepository.findByRecipientOrderByCreatedAtDesc(recipient, pageable),
                         Executors.newVirtualThreadPerTaskExecutor());
     }
-    
+
+    /**
+     * Get user notifications with optional type and status filters
+     *
+     * MANDATORY: Rule #1 - Java 24 Virtual Threads for async operations
+     * MANDATORY: Rule #12 - CompletableFuture with virtual thread executors
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 1
+     *
+     * @param userId User ID to filter by
+     * @param type Optional notification type filter (null = all types)
+     * @param status Optional notification status filter (null = all statuses)
+     * @param pageable Pagination parameters
+     * @return CompletableFuture containing page of filtered notification history
+     */
+    public CompletableFuture<Page<NotificationHistory>> getUserNotifications(
+            String userId,
+            NotificationRequest.NotificationType type,
+            NotificationStatus status,
+            Pageable pageable) {
+
+        return CompletableFuture
+            .supplyAsync(() -> historyRepository.findByRecipientWithOptionalFilters(
+                    userId, type, status, pageable),
+                        Executors.newVirtualThreadPerTaskExecutor());
+    }
+
     /**
      * Get notifications eligible for retry
      */
@@ -236,30 +262,40 @@ public class NotificationHistoryService {
     
     /**
      * Generic result handler for history operations
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 1
      */
     private Result<NotificationHistory, String> handleHistoryResult(
-            Result<NotificationHistory, String> result, 
+            Result<NotificationHistory, String> result,
             Throwable throwable) {
-        
-        if (throwable != null) {
-            log.error("Notification history operation error", throwable);
-            return Result.failure("Operation failed: " + throwable.getMessage());
-        }
-        return result;
+
+        return Optional.ofNullable(throwable)
+            .map(error -> {
+                log.error("Notification history operation error", error);
+                return Result.<NotificationHistory, String>failure("Operation failed: " + error.getMessage());
+            })
+            .orElse(result);
     }
     
     /**
      * Generic result handler for list operations
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 1
      */
     private Result<List<NotificationHistory>, String> handleListResult(
-            Result<List<NotificationHistory>, String> result, 
+            Result<List<NotificationHistory>, String> result,
             Throwable throwable) {
-        
-        if (throwable != null) {
-            log.error("Notification history list operation error", throwable);
-            return Result.failure("Operation failed: " + throwable.getMessage());
-        }
-        return result;
+
+        return Optional.ofNullable(throwable)
+            .map(error -> {
+                log.error("Notification history list operation error", error);
+                return Result.<List<NotificationHistory>, String>failure("Operation failed: " + error.getMessage());
+            })
+            .orElse(result);
     }
     
     /**

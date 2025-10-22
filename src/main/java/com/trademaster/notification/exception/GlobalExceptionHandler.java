@@ -232,11 +232,12 @@ public class GlobalExceptionHandler {
         errorResponse.put("message", message);
         errorResponse.put("timestamp", LocalDateTime.now());
         errorResponse.put("path", request.getDescription(false).replace("uri=", ""));
-        
-        if (details != null && !details.isEmpty()) {
-            errorResponse.put("details", details);
-        }
-        
+
+        // Rule #3: NO if-else, use Optional for conditional map entry
+        java.util.Optional.ofNullable(details)
+            .filter(d -> !d.isEmpty())
+            .ifPresent(d -> errorResponse.put("details", d));
+
         return errorResponse;
     }
 }

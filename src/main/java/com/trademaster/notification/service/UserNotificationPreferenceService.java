@@ -56,11 +56,11 @@ public class UserNotificationPreferenceService {
     
     private Result<UserNotificationPreference, String> performCreateDefault(String userId, String createdBy) {
         return Result.tryExecute(() -> {
-            // Check if preferences already exist
-            if (preferenceRepository.existsByUserId(userId)) {
-                throw new IllegalArgumentException("Preferences already exist for user: " + userId);
-            }
-            
+            // Rule #3: NO if-else, use Optional.filter() for validation
+            java.util.Optional.of(preferenceRepository.existsByUserId(userId))
+                .filter(exists -> !exists)
+                .orElseThrow(() -> new IllegalArgumentException("Preferences already exist for user: " + userId));
+
             UserNotificationPreference preference = UserNotificationPreference.createDefault(userId, createdBy);
             UserNotificationPreference saved = preferenceRepository.save(preference);
             
@@ -116,11 +116,10 @@ public class UserNotificationPreferenceService {
         return preferenceRepository.findByUserId(userId)
             .map(preference -> Result.tryExecute(() -> {
                 preference.updatePreferences(notificationsEnabled, preferredChannel, enabledChannels, updatedBy);
-                
-                if (enabledCategories != null) {
-                    preference.setEnabledCategories(enabledCategories);
-                }
-                
+
+                // Rule #3: NO if-else, use Optional.ifPresent() for conditional update
+                java.util.Optional.ofNullable(enabledCategories).ifPresent(preference::setEnabledCategories);
+
                 UserNotificationPreference updated = preferenceRepository.save(preference);
                 
                 log.info("Preferences updated for user: {}", userId);
@@ -154,12 +153,10 @@ public class UserNotificationPreferenceService {
         
         return preferenceRepository.findByUserId(userId)
             .map(preference -> Result.tryExecute(() -> {
-                if (emailAddress != null) {
-                    preference.setEmailAddress(emailAddress);
-                }
-                if (phoneNumber != null) {
-                    preference.setPhoneNumber(phoneNumber);
-                }
+                // Rule #3: NO if-else, use Optional.ifPresent() for conditional updates
+                java.util.Optional.ofNullable(emailAddress).ifPresent(preference::setEmailAddress);
+                java.util.Optional.ofNullable(phoneNumber).ifPresent(preference::setPhoneNumber);
+
                 preference.setUpdatedBy(updatedBy);
                 
                 UserNotificationPreference updated = preferenceRepository.save(preference);
@@ -200,18 +197,12 @@ public class UserNotificationPreferenceService {
         
         return preferenceRepository.findByUserId(userId)
             .map(preference -> Result.tryExecute(() -> {
-                if (quietHoursEnabled != null) {
-                    preference.setQuietHoursEnabled(quietHoursEnabled);
-                }
-                if (quietStartTime != null) {
-                    preference.setQuietStartTime(quietStartTime);
-                }
-                if (quietEndTime != null) {
-                    preference.setQuietEndTime(quietEndTime);
-                }
-                if (timeZone != null) {
-                    preference.setTimeZone(timeZone);
-                }
+                // Rule #3: NO if-else, use Optional.ifPresent() for conditional updates
+                java.util.Optional.ofNullable(quietHoursEnabled).ifPresent(preference::setQuietHoursEnabled);
+                java.util.Optional.ofNullable(quietStartTime).ifPresent(preference::setQuietStartTime);
+                java.util.Optional.ofNullable(quietEndTime).ifPresent(preference::setQuietEndTime);
+                java.util.Optional.ofNullable(timeZone).ifPresent(preference::setTimeZone);
+
                 preference.setUpdatedBy(updatedBy);
                 
                 UserNotificationPreference updated = preferenceRepository.save(preference);
@@ -247,12 +238,10 @@ public class UserNotificationPreferenceService {
         
         return preferenceRepository.findByUserId(userId)
             .map(preference -> Result.tryExecute(() -> {
-                if (frequencyLimitPerHour != null) {
-                    preference.setFrequencyLimitPerHour(frequencyLimitPerHour);
-                }
-                if (frequencyLimitPerDay != null) {
-                    preference.setFrequencyLimitPerDay(frequencyLimitPerDay);
-                }
+                // Rule #3: NO if-else, use Optional.ifPresent() for conditional updates
+                java.util.Optional.ofNullable(frequencyLimitPerHour).ifPresent(preference::setFrequencyLimitPerHour);
+                java.util.Optional.ofNullable(frequencyLimitPerDay).ifPresent(preference::setFrequencyLimitPerDay);
+
                 preference.setUpdatedBy(updatedBy);
                 
                 UserNotificationPreference updated = preferenceRepository.save(preference);
@@ -451,29 +440,43 @@ public class UserNotificationPreferenceService {
     
     /**
      * Generic result handler for preference operations
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #11 - Result Type error handling
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 2
      */
     private Result<UserNotificationPreference, String> handlePreferenceResult(
-            Result<UserNotificationPreference, String> result, 
+            Result<UserNotificationPreference, String> result,
             Throwable throwable) {
-        
-        if (throwable != null) {
-            log.error("Preference operation error", throwable);
-            return Result.failure("Preference operation failed: " + throwable.getMessage());
-        }
-        return result;
+
+        // Rule #3: NO if-else, use Optional.map() for conditional error handling
+        return java.util.Optional.ofNullable(throwable)
+            .map(error -> {
+                log.error("Preference operation error", error);
+                return Result.<UserNotificationPreference, String>failure("Preference operation failed: " + error.getMessage());
+            })
+            .orElse(result);
     }
-    
+
     /**
      * Generic result handler for integer operations
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #11 - Result Type error handling
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 2
      */
     private Result<Integer, String> handleIntegerResult(
-            Result<Integer, String> result, 
+            Result<Integer, String> result,
             Throwable throwable) {
-        
-        if (throwable != null) {
-            log.error("Preference batch operation error", throwable);
-            return Result.failure("Batch operation failed: " + throwable.getMessage());
-        }
-        return result;
+
+        // Rule #3: NO if-else, use Optional.map() for conditional error handling
+        return java.util.Optional.ofNullable(throwable)
+            .map(error -> {
+                log.error("Preference batch operation error", error);
+                return Result.<Integer, String>failure("Batch operation failed: " + error.getMessage());
+            })
+            .orElse(result);
     }
 }

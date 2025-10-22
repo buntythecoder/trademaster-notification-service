@@ -38,32 +38,46 @@ public class NotificationWebSocketHandler implements WebSocketHandler {
     
     /**
      * Handle new WebSocket connection
-     * 
-     * MANDATORY: Virtual Threads - Rule #12
+     *
+     * MANDATORY: Rule #12 - Virtual Threads
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #14 - Pattern Matching with switch expressions
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 4
      */
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         String userId = extractUserId(session);
         String userRole = extractUserRole(session);
-        
-        if (userId == null) {
-            log.warn("WebSocket connection without user ID, closing session: {}", session.getId());
-            session.close(CloseStatus.POLICY_VIOLATION.withReason("User ID required"));
-            return;
+
+        // Rule #3: NO if-else, use Optional.orElseThrow() for validation
+        java.util.Optional.ofNullable(userId)
+            .orElseThrow(() -> {
+                log.warn("WebSocket connection without user ID, closing session: {}", session.getId());
+                try {
+                    session.close(CloseStatus.POLICY_VIOLATION.withReason("User ID required"));
+                } catch (IOException e) {
+                    log.error("Failed to close session: {}", session.getId(), e);
+                }
+                return new IllegalStateException("User ID required");
+            });
+
+        // Store session based on role using switch expression
+        String role = userRole != null ? userRole : "USER";
+        switch (role) {
+            case "ADMIN", "NOTIFICATION_MANAGER" -> {
+                adminSessions.put(session.getId(), session);
+                log.info("Admin WebSocket session established: userId={}, sessionId={}", userId, session.getId());
+            }
+            default -> {
+                activeSessions.put(userId, session);
+                log.info("User WebSocket session established: userId={}, sessionId={}", userId, session.getId());
+            }
         }
-        
-        // Store session based on role
-        if ("ADMIN".equals(userRole) || "NOTIFICATION_MANAGER".equals(userRole)) {
-            adminSessions.put(session.getId(), session);
-            log.info("Admin WebSocket session established: userId={}, sessionId={}", userId, session.getId());
-        } else {
-            activeSessions.put(userId, session);
-            log.info("User WebSocket session established: userId={}, sessionId={}", userId, session.getId());
-        }
-        
+
         // Send welcome message asynchronously
         CompletableFuture
-            .runAsync(() -> sendWelcomeMessage(session, userId), 
+            .runAsync(() -> sendWelcomeMessage(session, userId),
                      Executors.newVirtualThreadPerTaskExecutor())
             .exceptionally(throwable -> {
                 log.error("Failed to send welcome message to user: {}", userId, throwable);
@@ -73,24 +87,32 @@ public class NotificationWebSocketHandler implements WebSocketHandler {
     
     /**
      * Handle incoming WebSocket messages
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 3
      */
     @Override
     public void handleMessage(WebSocketSession session, WebSocketMessage<?> message) throws Exception {
         String userId = extractUserId(session);
-        
-        if (message instanceof TextMessage textMessage) {
-            String payload = textMessage.getPayload();
-            log.debug("Received WebSocket message from user {}: {}", userId, payload);
-            
-            // Handle different message types
-            CompletableFuture
-                .runAsync(() -> processIncomingMessage(session, userId, payload), 
-                         Executors.newVirtualThreadPerTaskExecutor())
-                .exceptionally(throwable -> {
-                    log.error("Error processing WebSocket message from user: {}", userId, throwable);
-                    return null;
-                });
-        }
+
+        // Rule #3: NO if-else, use Optional with instanceof check and pattern matching
+        java.util.Optional.of(message)
+            .filter(TextMessage.class::isInstance)
+            .map(TextMessage.class::cast)
+            .ifPresent(textMessage -> {
+                String payload = textMessage.getPayload();
+                log.debug("Received WebSocket message from user {}: {}", userId, payload);
+
+                // Handle different message types
+                CompletableFuture
+                    .runAsync(() -> processIncomingMessage(session, userId, payload),
+                             Executors.newVirtualThreadPerTaskExecutor())
+                    .exceptionally(throwable -> {
+                        log.error("Error processing WebSocket message from user: {}", userId, throwable);
+                        return null;
+                    });
+            });
     }
     
     /**
@@ -176,48 +198,73 @@ public class NotificationWebSocketHandler implements WebSocketHandler {
     
     // Private helper methods
     
+    /**
+     * Perform user notification send
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 4
+     */
     private boolean performUserNotificationSend(String userId, NotificationResponse notification) {
         WebSocketSession session = activeSessions.get(userId);
-        
-        if (session == null || !session.isOpen()) {
-            log.debug("No active WebSocket session for user: {}", userId);
-            return false;
-        }
-        
-        try {
-            WebSocketMessage message = createNotificationMessage(notification);
-            session.sendMessage(message);
-            
-            log.debug("Real-time notification sent to user: {}, notificationId: {}", 
-                     userId, notification.notificationId());
-            return true;
-            
-        } catch (IOException e) {
-            log.error("Failed to send WebSocket message to user: {}", userId, e);
-            // Remove broken session
-            activeSessions.remove(userId);
-            return false;
-        }
+
+        // Rule #3: NO if-else, use Optional.filter().map().orElse()
+        return java.util.Optional.ofNullable(session)
+            .filter(WebSocketSession::isOpen)
+            .map(openSession -> {
+                try {
+                    WebSocketMessage message = createNotificationMessage(notification);
+                    openSession.sendMessage(message);
+
+                    log.debug("Real-time notification sent to user: {}, notificationId: {}",
+                             userId, notification.notificationId());
+                    return true;
+
+                } catch (IOException e) {
+                    log.error("Failed to send WebSocket message to user: {}", userId, e);
+                    // Remove broken session
+                    activeSessions.remove(userId);
+                    return false;
+                }
+            })
+            .orElseGet(() -> {
+                log.debug("No active WebSocket session for user: {}", userId);
+                return false;
+            });
     }
     
+    /**
+     * Perform admin broadcast
+     *
+     * MANDATORY: Rule #13 - Stream API for collection processing (NO for-loop)
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 3
+     */
     private int performAdminBroadcast(Map<String, Object> adminNotification) {
-        int sentCount = 0;
-        
-        for (WebSocketSession session : adminSessions.values()) {
-            if (session.isOpen()) {
-                try {
-                    WebSocketMessage message = createAdminMessage(adminNotification);
-                    session.sendMessage(message);
-                    sentCount++;
-                } catch (IOException e) {
-                    log.error("Failed to send admin broadcast to session: {}", session.getId(), e);
-                    adminSessions.remove(session.getId());
-                }
-            }
-        }
-        
+        // Rule #13: NO for-loop, use Stream API with filter and count
+        long sentCount = adminSessions.values().stream()
+            .filter(WebSocketSession::isOpen)
+            .filter(session -> sendAdminMessage(session, adminNotification))
+            .count();
+
         log.debug("Admin broadcast sent to {} sessions", sentCount);
-        return sentCount;
+        return (int) sentCount;
+    }
+
+    /**
+     * Send admin message to single session
+     */
+    private boolean sendAdminMessage(WebSocketSession session, Map<String, Object> adminNotification) {
+        try {
+            WebSocketMessage message = createAdminMessage(adminNotification);
+            session.sendMessage(message);
+            return true;
+        } catch (IOException e) {
+            log.error("Failed to send admin broadcast to session: {}", session.getId(), e);
+            adminSessions.remove(session.getId());
+            return false;
+        }
     }
     
     private void processIncomingMessage(WebSocketSession session, String userId, String payload) {
@@ -253,12 +300,22 @@ public class NotificationWebSocketHandler implements WebSocketHandler {
         }
     }
     
+    /**
+     * Handle mark read message
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 2
+     */
     private void handleMarkReadMessage(WebSocketSession session, String userId, Map<String, Object> messageData) {
         String notificationId = (String) messageData.get("notificationId");
-        if (notificationId != null) {
-            log.debug("User {} marked notification as read: {}", userId, notificationId);
-            // Here you would update the notification status in the database
-        }
+
+        // Rule #3: NO if-else, use Optional.ifPresent()
+        java.util.Optional.ofNullable(notificationId)
+            .ifPresent(id -> {
+                log.debug("User {} marked notification as read: {}", userId, id);
+                // Here you would update the notification status in the database
+            });
     }
     
     private void handlePreferenceUpdateMessage(WebSocketSession session, String userId, Map<String, Object> messageData) {

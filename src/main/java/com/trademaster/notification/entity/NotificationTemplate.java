@@ -2,6 +2,8 @@ package com.trademaster.notification.entity;
 
 import com.trademaster.notification.dto.NotificationRequest;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -13,10 +15,11 @@ import java.util.Set;
 
 /**
  * Notification Template Entity for Template Management
- * 
+ *
  * MANDATORY: JPA Best Practices - Rule #21
  * MANDATORY: Template Management - FRONT-020
  * MANDATORY: Version Control - Rule #25
+ * MANDATORY: Lombok Standards - Rule #10
  */
 @Entity
 @Table(name = "notification_templates", indexes = {
@@ -29,6 +32,8 @@ import java.util.Set;
 @Getter
 @Setter
 @NoArgsConstructor
+@AllArgsConstructor
+@Builder(toBuilder = true)
 public class NotificationTemplate {
     
     @Id

@@ -56,50 +56,25 @@ public class SSLConfigurationService implements HealthIndicator {
 
     /**
      * Perform comprehensive SSL health check
-     * 
-     * MANDATORY: Functional Programming - Rule #3
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #14 - Pattern Matching with switch expressions
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 4
      */
     private Health performSSLHealthCheck() {
         try {
             boolean sslEnabled = isSSLEnabled();
-            
-            if (!sslEnabled) {
-                return Health.up()
+
+            // Rule #3: NO if-else, use Optional.filter().map().orElseGet()
+            return java.util.Optional.of(sslEnabled)
+                .filter(Boolean::booleanValue)
+                .map(_ -> buildSSLEnabledHealthCheck())
+                .orElseGet(() -> Health.up()
                     .withDetail("ssl_status", "DISABLED")
                     .withDetail("ssl_enabled", false)
                     .withDetail("timestamp", LocalDateTime.now().toString())
-                    .build();
-            }
-
-            Map<String, Object> keystoreHealth = checkKeystoreHealth();
-            Map<String, Object> truststoreHealth = checkTruststoreHealth();
-            Map<String, Object> certificateHealth = checkCertificateExpiration();
-            Map<String, Object> cipherSuiteHealth = checkCipherSuiteConfiguration();
-
-            boolean allHealthy = (Boolean) keystoreHealth.getOrDefault("keystore_valid", false) &&
-                               (Boolean) truststoreHealth.getOrDefault("truststore_valid", false) &&
-                               (Boolean) certificateHealth.getOrDefault("certificate_valid", false) &&
-                               (Boolean) cipherSuiteHealth.getOrDefault("cipher_suites_secure", false);
-
-            return allHealthy 
-                ? Health.up()
-                    .withDetail("ssl_status", "HEALTHY")
-                    .withDetail("ssl_enabled", true)
-                    .withDetail("keystore", keystoreHealth)
-                    .withDetail("truststore", truststoreHealth)
-                    .withDetail("certificates", certificateHealth)
-                    .withDetail("cipher_suites", cipherSuiteHealth)
-                    .withDetail("timestamp", LocalDateTime.now().toString())
-                    .build()
-                : Health.down()
-                    .withDetail("ssl_status", "UNHEALTHY")
-                    .withDetail("ssl_enabled", true)
-                    .withDetail("keystore", keystoreHealth)
-                    .withDetail("truststore", truststoreHealth)
-                    .withDetail("certificates", certificateHealth)
-                    .withDetail("cipher_suites", cipherSuiteHealth)
-                    .withDetail("timestamp", LocalDateTime.now().toString())
-                    .build();
+                    .build());
 
         } catch (Exception e) {
             log.error("SSL health check failed", e);
@@ -113,6 +88,47 @@ public class SSLConfigurationService implements HealthIndicator {
     }
 
     /**
+     * Build SSL health check when SSL is enabled
+     *
+     * MANDATORY: Rule #14 - Pattern Matching with switch expression
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 3
+     */
+    private Health buildSSLEnabledHealthCheck() {
+        Map<String, Object> keystoreHealth = checkKeystoreHealth();
+        Map<String, Object> truststoreHealth = checkTruststoreHealth();
+        Map<String, Object> certificateHealth = checkCertificateExpiration();
+        Map<String, Object> cipherSuiteHealth = checkCipherSuiteConfiguration();
+
+        boolean allHealthy = (Boolean) keystoreHealth.getOrDefault("keystore_valid", false) &&
+                           (Boolean) truststoreHealth.getOrDefault("truststore_valid", false) &&
+                           (Boolean) certificateHealth.getOrDefault("certificate_valid", false) &&
+                           (Boolean) cipherSuiteHealth.getOrDefault("cipher_suites_secure", false);
+
+        // Rule #14: Use switch expression instead of ternary
+        return switch (allHealthy) {
+            case true -> Health.up()
+                .withDetail("ssl_status", "HEALTHY")
+                .withDetail("ssl_enabled", true)
+                .withDetail("keystore", keystoreHealth)
+                .withDetail("truststore", truststoreHealth)
+                .withDetail("certificates", certificateHealth)
+                .withDetail("cipher_suites", cipherSuiteHealth)
+                .withDetail("timestamp", LocalDateTime.now().toString())
+                .build();
+            case false -> Health.down()
+                .withDetail("ssl_status", "UNHEALTHY")
+                .withDetail("ssl_enabled", true)
+                .withDetail("keystore", keystoreHealth)
+                .withDetail("truststore", truststoreHealth)
+                .withDetail("certificates", certificateHealth)
+                .withDetail("cipher_suites", cipherSuiteHealth)
+                .withDetail("timestamp", LocalDateTime.now().toString())
+                .build();
+        };
+    }
+
+    /**
      * Check if SSL is enabled
      */
     private boolean isSSLEnabled() {
@@ -123,25 +139,43 @@ public class SSLConfigurationService implements HealthIndicator {
 
     /**
      * Check keystore health
-     * 
-     * MANDATORY: Functional Programming - Rule #3
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 4
      */
     private Map<String, Object> checkKeystoreHealth() {
         try {
-            String keystorePath = System.getProperty("server.ssl.key-store", 
+            String keystorePath = System.getProperty("server.ssl.key-store",
                                  System.getenv("SSL_KEYSTORE_PATH"));
-            String keystorePassword = System.getProperty("server.ssl.key-store-password", 
+            String keystorePassword = System.getProperty("server.ssl.key-store-password",
                                      System.getenv("SSL_KEYSTORE_PASSWORD"));
-            
-            if (keystorePath == null || keystorePassword == null) {
-                return Map.of(
+
+            // Rule #3: NO if-else, use Optional.flatMap() for null checks
+            return java.util.Optional.ofNullable(keystorePath)
+                .flatMap(path -> java.util.Optional.ofNullable(keystorePassword)
+                    .map(password -> loadKeystoreDetails(path, password)))
+                .orElseGet(() -> Map.of(
                     "keystore_valid", false,
                     "error", "Keystore path or password not configured",
                     "keystore_path", keystorePath != null ? keystorePath : "not_configured"
-                );
-            }
+                ));
 
-            // Try to load keystore
+        } catch (Exception e) {
+            log.warn("Keystore health check failed", e);
+            return Map.of(
+                "keystore_valid", false,
+                "error", e.getMessage(),
+                "error_type", e.getClass().getSimpleName()
+            );
+        }
+    }
+
+    /**
+     * Load keystore details
+     */
+    private Map<String, Object> loadKeystoreDetails(String keystorePath, String keystorePassword) {
+        try {
             KeyStore keystore = KeyStore.getInstance("PKCS12");
             try (FileInputStream fis = new FileInputStream(keystorePath)) {
                 keystore.load(fis, keystorePassword.toCharArray());
@@ -158,9 +192,7 @@ public class SSLConfigurationService implements HealthIndicator {
                 "primary_alias", alias,
                 "certificate_type", certificate.getType()
             );
-
         } catch (Exception e) {
-            log.warn("Keystore health check failed", e);
             return Map.of(
                 "keystore_valid", false,
                 "error", e.getMessage(),
@@ -171,37 +203,27 @@ public class SSLConfigurationService implements HealthIndicator {
 
     /**
      * Check truststore health
-     * 
-     * MANDATORY: Functional Programming - Rule #3
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 4
      */
     private Map<String, Object> checkTruststoreHealth() {
         try {
-            String truststorePath = System.getProperty("server.ssl.trust-store", 
+            String truststorePath = System.getProperty("server.ssl.trust-store",
                                    System.getenv("SSL_TRUSTSTORE_PATH"));
-            String truststorePassword = System.getProperty("server.ssl.trust-store-password", 
+            String truststorePassword = System.getProperty("server.ssl.trust-store-password",
                                        System.getenv("SSL_TRUSTSTORE_PASSWORD"));
-            
-            if (truststorePath == null || truststorePassword == null) {
-                return Map.of(
+
+            // Rule #3: NO if-else, use Optional.flatMap() for null checks
+            return java.util.Optional.ofNullable(truststorePath)
+                .flatMap(path -> java.util.Optional.ofNullable(truststorePassword)
+                    .map(password -> loadTruststoreDetails(path, password)))
+                .orElseGet(() -> Map.of(
                     "truststore_valid", false,
                     "error", "Truststore path or password not configured",
                     "truststore_path", truststorePath != null ? truststorePath : "not_configured"
-                );
-            }
-
-            // Try to load truststore
-            KeyStore truststore = KeyStore.getInstance("PKCS12");
-            try (FileInputStream fis = new FileInputStream(truststorePath)) {
-                truststore.load(fis, truststorePassword.toCharArray());
-            }
-
-            int certificateCount = truststore.size();
-
-            return Map.of(
-                "truststore_valid", true,
-                "truststore_path", truststorePath,
-                "certificate_count", certificateCount
-            );
+                ));
 
         } catch (Exception e) {
             log.warn("Truststore health check failed", e);
@@ -214,60 +236,54 @@ public class SSLConfigurationService implements HealthIndicator {
     }
 
     /**
+     * Load truststore details
+     */
+    private Map<String, Object> loadTruststoreDetails(String truststorePath, String truststorePassword) {
+        try {
+            KeyStore truststore = KeyStore.getInstance("PKCS12");
+            try (FileInputStream fis = new FileInputStream(truststorePath)) {
+                truststore.load(fis, truststorePassword.toCharArray());
+            }
+
+            int certificateCount = truststore.size();
+
+            return Map.of(
+                "truststore_valid", true,
+                "truststore_path", truststorePath,
+                "certificate_count", certificateCount
+            );
+        } catch (Exception e) {
+            return Map.of(
+                "truststore_valid", false,
+                "error", e.getMessage(),
+                "error_type", e.getClass().getSimpleName()
+            );
+        }
+    }
+
+    /**
      * Check certificate expiration
-     * 
-     * MANDATORY: Functional Programming - Rule #3
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #14 - Pattern Matching with switch expressions
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 5
      */
     private Map<String, Object> checkCertificateExpiration() {
         try {
-            String keystorePath = System.getProperty("server.ssl.key-store", 
+            String keystorePath = System.getProperty("server.ssl.key-store",
                                  System.getenv("SSL_KEYSTORE_PATH"));
-            String keystorePassword = System.getProperty("server.ssl.key-store-password", 
+            String keystorePassword = System.getProperty("server.ssl.key-store-password",
                                      System.getenv("SSL_KEYSTORE_PASSWORD"));
-            
-            if (keystorePath == null || keystorePassword == null) {
-                return Map.of(
+
+            // Rule #3: NO if-else, use Optional.flatMap() for null checks
+            return java.util.Optional.ofNullable(keystorePath)
+                .flatMap(path -> java.util.Optional.ofNullable(keystorePassword)
+                    .map(password -> checkCertificateDetails(path, password)))
+                .orElseGet(() -> Map.of(
                     "certificate_valid", false,
                     "error", "Cannot check certificate expiration - keystore not configured"
-                );
-            }
-
-            KeyStore keystore = KeyStore.getInstance("PKCS12");
-            try (FileInputStream fis = new FileInputStream(keystorePath)) {
-                keystore.load(fis, keystorePassword.toCharArray());
-            }
-
-            String alias = keystore.aliases().nextElement();
-            Certificate certificate = keystore.getCertificate(alias);
-            
-            if (!(certificate instanceof X509Certificate)) {
-                return Map.of(
-                    "certificate_valid", false,
-                    "error", "Certificate is not X.509 format"
-                );
-            }
-
-            X509Certificate x509cert = (X509Certificate) certificate;
-            Date expirationDate = x509cert.getNotAfter();
-            Date currentDate = new Date();
-            
-            long daysUntilExpiration = (expirationDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24);
-            boolean isExpired = currentDate.after(expirationDate);
-            boolean isExpiringSoon = daysUntilExpiration <= CERTIFICATE_WARNING_DAYS;
-
-            String status = isExpired ? "EXPIRED" : 
-                           isExpiringSoon ? "EXPIRING_SOON" : "VALID";
-
-            return Map.of(
-                "certificate_valid", !isExpired,
-                "certificate_status", status,
-                "expiration_date", expirationDate.toString(),
-                "days_until_expiration", daysUntilExpiration,
-                "subject", x509cert.getSubjectDN().toString(),
-                "issuer", x509cert.getIssuerDN().toString(),
-                "serial_number", x509cert.getSerialNumber().toString(),
-                "signature_algorithm", x509cert.getSigAlgName()
-            );
+                ));
 
         } catch (Exception e) {
             log.warn("Certificate expiration check failed", e);
@@ -280,38 +296,103 @@ public class SSLConfigurationService implements HealthIndicator {
     }
 
     /**
+     * Check certificate details
+     *
+     * MANDATORY: Rule #14 - Pattern Matching with switch expression
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 4
+     */
+    private Map<String, Object> checkCertificateDetails(String keystorePath, String keystorePassword) {
+        try {
+            KeyStore keystore = KeyStore.getInstance("PKCS12");
+            try (FileInputStream fis = new FileInputStream(keystorePath)) {
+                keystore.load(fis, keystorePassword.toCharArray());
+            }
+
+            String alias = keystore.aliases().nextElement();
+            Certificate certificate = keystore.getCertificate(alias);
+
+            // Rule #3: NO if-else, use Optional with instanceof check
+            return java.util.Optional.of(certificate)
+                .filter(X509Certificate.class::isInstance)
+                .map(X509Certificate.class::cast)
+                .map(x509cert -> buildCertificateExpirationDetails(x509cert))
+                .orElseGet(() -> Map.of(
+                    "certificate_valid", false,
+                    "error", "Certificate is not X.509 format"
+                ));
+
+        } catch (Exception e) {
+            return Map.of(
+                "certificate_valid", false,
+                "error", e.getMessage(),
+                "error_type", e.getClass().getSimpleName()
+            );
+        }
+    }
+
+    /**
+     * Build certificate expiration details
+     *
+     * MANDATORY: Rule #14 - Pattern Matching with switch expression
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 3
+     */
+    private Map<String, Object> buildCertificateExpirationDetails(X509Certificate x509cert) {
+        Date expirationDate = x509cert.getNotAfter();
+        Date currentDate = new Date();
+
+        long daysUntilExpiration = (expirationDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24);
+        boolean isExpired = currentDate.after(expirationDate);
+        boolean isExpiringSoon = daysUntilExpiration <= CERTIFICATE_WARNING_DAYS;
+
+        // Rule #14: Use switch expression for certificate status determination
+        String status = switch (isExpired) {
+            case true -> "EXPIRED";
+            case false -> switch (isExpiringSoon) {
+                case true -> "EXPIRING_SOON";
+                case false -> "VALID";
+            };
+        };
+
+        return Map.of(
+            "certificate_valid", !isExpired,
+            "certificate_status", status,
+            "expiration_date", expirationDate.toString(),
+            "days_until_expiration", daysUntilExpiration,
+            "subject", x509cert.getSubjectDN().toString(),
+            "issuer", x509cert.getIssuerDN().toString(),
+            "serial_number", x509cert.getSerialNumber().toString(),
+            "signature_algorithm", x509cert.getSigAlgName()
+        );
+    }
+
+    /**
      * Check cipher suite configuration
-     * 
-     * MANDATORY: Functional Programming - Rule #3
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Stream API)
+     * MANDATORY: Rule #13 - Stream API for collection processing
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 4
      */
     private Map<String, Object> checkCipherSuiteConfiguration() {
         try {
             SSLContext sslContext = SSLContext.getDefault();
             SSLEngine sslEngine = sslContext.createSSLEngine();
-            
+
             String[] enabledCipherSuites = sslEngine.getEnabledCipherSuites();
             String[] supportedCipherSuites = sslEngine.getSupportedCipherSuites();
             String[] enabledProtocols = sslEngine.getEnabledProtocols();
             String[] supportedProtocols = sslEngine.getSupportedProtocols();
 
-            // Check for secure protocols (TLS 1.2 and above)
-            boolean hasSecureProtocols = false;
-            for (String protocol : enabledProtocols) {
-                if (protocol.equals("TLSv1.2") || protocol.equals("TLSv1.3")) {
-                    hasSecureProtocols = true;
-                    break;
-                }
-            }
+            // Rule #13: NO for-loop, use Stream API with anyMatch for secure protocols
+            boolean hasSecureProtocols = java.util.Arrays.stream(enabledProtocols)
+                .anyMatch(protocol -> protocol.equals("TLSv1.2") || protocol.equals("TLSv1.3"));
 
-            // Check for weak cipher suites
-            boolean hasWeakCiphers = false;
-            for (String cipher : enabledCipherSuites) {
-                if (cipher.contains("NULL") || cipher.contains("EXPORT") || 
-                    cipher.contains("DES") || cipher.contains("MD5")) {
-                    hasWeakCiphers = true;
-                    break;
-                }
-            }
+            // Rule #13: NO for-loop, use Stream API with anyMatch for weak ciphers
+            boolean hasWeakCiphers = java.util.Arrays.stream(enabledCipherSuites)
+                .anyMatch(cipher -> cipher.contains("NULL") || cipher.contains("EXPORT") ||
+                                   cipher.contains("DES") || cipher.contains("MD5"));
 
             return Map.of(
                 "cipher_suites_secure", hasSecureProtocols && !hasWeakCiphers,

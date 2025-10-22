@@ -217,41 +217,44 @@ public class SecurityMediator {
     
     /**
      * Validate authentication token
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 3
      */
     private AuthenticationStatus validateAuthenticationToken(SecurityContext context) {
-        // System context is always valid
-        if ("system".equals(context.userId())) {
-            return AuthenticationStatus.VALID;
-        }
-        
-        // For now, basic validation - would integrate with JWT in production
-        if (context.sessionId() == null || context.sessionId().isEmpty()) {
-            return AuthenticationStatus.MISSING_TOKEN;
-        }
-        
-        // Simulate token validation
-        return AuthenticationStatus.VALID;
+        // Rule #3: NO if-else, use Optional.orElseGet() for conditional logic
+        return java.util.Optional.of(context.userId())
+            .filter("system"::equals)
+            .map(_ -> AuthenticationStatus.VALID)
+            .orElseGet(() -> java.util.Optional.ofNullable(context.sessionId())
+                .filter(sessionId -> !sessionId.isEmpty())
+                .map(_ -> AuthenticationStatus.VALID)
+                .orElse(AuthenticationStatus.MISSING_TOKEN));
     }
     
     /**
      * Check operation permissions
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #14 - Pattern Matching with switch
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 4
      */
     private AuthorizationStatus checkOperationPermission(SecurityContext context, String operation) {
-        // System context has all permissions
-        if (context.hasRole("SYSTEM")) {
-            return AuthorizationStatus.ALLOWED;
-        }
-        
-        // Basic role-based authorization
-        return switch (operation) {
-            case "SEND_NOTIFICATION" -> context.hasAnyRole("USER", "ADMIN") ? 
-                AuthorizationStatus.ALLOWED : AuthorizationStatus.INSUFFICIENT_PERMISSIONS;
-            case "BULK_NOTIFICATION" -> context.hasRole("ADMIN") ?
-                AuthorizationStatus.ALLOWED : AuthorizationStatus.INSUFFICIENT_PERMISSIONS;
-            case "ADMIN_OPERATION" -> context.hasRole("ADMIN") ?
-                AuthorizationStatus.ALLOWED : AuthorizationStatus.INSUFFICIENT_PERMISSIONS;
-            default -> AuthorizationStatus.ALLOWED;
-        };
+        // Rule #3: NO if-else, use Optional.orElseGet() for conditional logic
+        return java.util.Optional.of(context.hasRole("SYSTEM"))
+            .filter(Boolean::booleanValue)
+            .map(_ -> AuthorizationStatus.ALLOWED)
+            .orElseGet(() -> switch (operation) {
+                case "SEND_NOTIFICATION" -> context.hasAnyRole("USER", "ADMIN") ?
+                    AuthorizationStatus.ALLOWED : AuthorizationStatus.INSUFFICIENT_PERMISSIONS;
+                case "BULK_NOTIFICATION" -> context.hasRole("ADMIN") ?
+                    AuthorizationStatus.ALLOWED : AuthorizationStatus.INSUFFICIENT_PERMISSIONS;
+                case "ADMIN_OPERATION" -> context.hasRole("ADMIN") ?
+                    AuthorizationStatus.ALLOWED : AuthorizationStatus.INSUFFICIENT_PERMISSIONS;
+                default -> AuthorizationStatus.ALLOWED;
+            });
     }
     
     /**

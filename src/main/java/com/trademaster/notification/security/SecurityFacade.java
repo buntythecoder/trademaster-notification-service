@@ -121,17 +121,19 @@ public class SecurityFacade {
     
     /**
      * Extract user ID from request headers/tokens
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 2
      */
     private String extractUserId(HttpServletRequest request) {
-        // Check for user header (would normally decode JWT)
-        String userIdHeader = request.getHeader("X-User-ID");
-        if (userIdHeader != null && !userIdHeader.isEmpty()) {
-            return userIdHeader;
-        }
-        
-        // Fallback to session-based ID
-        String sessionId = request.getSession().getId();
-        return "user-" + sessionId.substring(0, 8);
+        // Rule #3: NO if-else, use Optional.orElseGet() for fallback logic
+        return java.util.Optional.ofNullable(request.getHeader("X-User-ID"))
+            .filter(header -> !header.isEmpty())
+            .orElseGet(() -> {
+                String sessionId = request.getSession().getId();
+                return "user-" + sessionId.substring(0, 8);
+            });
     }
     
     /**
@@ -143,32 +145,34 @@ public class SecurityFacade {
     
     /**
      * Extract user roles from request/token
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional map)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 2
      */
     private List<String> extractUserRoles(HttpServletRequest request) {
-        String rolesHeader = request.getHeader("X-User-Roles");
-        if (rolesHeader != null && !rolesHeader.isEmpty()) {
-            return List.of(rolesHeader.split(","));
-        }
-        
-        // Default role for authenticated users
-        return List.of("USER");
+        // Rule #3: NO if-else, use Optional.map() for transformation with fallback
+        return java.util.Optional.ofNullable(request.getHeader("X-User-Roles"))
+            .filter(header -> !header.isEmpty())
+            .map(header -> List.of(header.split(",")))
+            .orElse(List.of("USER"));
     }
     
     /**
      * Extract client IP address
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional flatMap chain)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 3
      */
     private String extractClientIpAddress(HttpServletRequest request) {
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
-            return xForwardedFor.split(",")[0].trim();
-        }
-        
-        String xRealIp = request.getHeader("X-Real-IP");
-        if (xRealIp != null && !xRealIp.isEmpty()) {
-            return xRealIp;
-        }
-        
-        return request.getRemoteAddr();
+        // Rule #3: NO if-else, use Optional.orElseGet() for nested fallback logic
+        return java.util.Optional.ofNullable(request.getHeader("X-Forwarded-For"))
+            .filter(header -> !header.isEmpty())
+            .map(header -> header.split(",")[0].trim())
+            .orElseGet(() -> java.util.Optional.ofNullable(request.getHeader("X-Real-IP"))
+                .filter(header -> !header.isEmpty())
+                .orElseGet(request::getRemoteAddr));
     }
     
     /**
@@ -181,19 +185,22 @@ public class SecurityFacade {
     
     /**
      * Validate authorization header
-     * 
-     * MANDATORY: Pattern Matching - Rule #14
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional map)
+     * MANDATORY: Rule #14 - Pattern Matching with switch
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 3
      */
     private AuthHeaderStatus validateAuthorizationHeader(String authHeader) {
-        if (authHeader == null || authHeader.isEmpty()) {
-            return AuthHeaderStatus.MISSING;
-        }
-        
-        return switch (authHeader) {
-            case String header when header.startsWith("Bearer ") && header.length() > 7 -> AuthHeaderStatus.VALID;
-            case String header when header.startsWith("Basic ") && header.length() > 6 -> AuthHeaderStatus.VALID;
-            default -> AuthHeaderStatus.INVALID;
-        };
+        // Rule #3: NO if-else, use Optional.map() with pattern matching
+        return java.util.Optional.ofNullable(authHeader)
+            .filter(header -> !header.isEmpty())
+            .map(header -> switch (header) {
+                case String h when h.startsWith("Bearer ") && h.length() > 7 -> AuthHeaderStatus.VALID;
+                case String h when h.startsWith("Basic ") && h.length() > 6 -> AuthHeaderStatus.VALID;
+                default -> AuthHeaderStatus.INVALID;
+            })
+            .orElse(AuthHeaderStatus.MISSING);
     }
     
     /**

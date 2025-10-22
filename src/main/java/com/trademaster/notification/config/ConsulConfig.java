@@ -72,18 +72,25 @@ public class ConsulConfig {
     ) {
         /**
          * Compact constructor with validation
-         * Following Rule #9 (Records with validation)
+         *
+         * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+         * MANDATORY: Rule #9 - Records with validation in compact constructor
+         * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+         * Complexity: 3
          */
         public ServiceMetadata {
-            if (serviceName == null || serviceName.isBlank()) {
-                throw new IllegalArgumentException("Service name cannot be null or blank");
-            }
-            if (version == null || version.isBlank()) {
-                throw new IllegalArgumentException("Version cannot be null or blank");
-            }
-            if (port <= 0 || port > 65535) {
-                throw new IllegalArgumentException("Port must be between 1 and 65535");
-            }
+            // Rule #3: NO if-else, use Optional.filter() for validation
+            java.util.Optional.ofNullable(serviceName)
+                .filter(name -> !name.isBlank())
+                .orElseThrow(() -> new IllegalArgumentException("Service name cannot be null or blank"));
+
+            java.util.Optional.ofNullable(version)
+                .filter(v -> !v.isBlank())
+                .orElseThrow(() -> new IllegalArgumentException("Version cannot be null or blank"));
+
+            java.util.Optional.of(port)
+                .filter(p -> p > 0 && p <= 65535)
+                .orElseThrow(() -> new IllegalArgumentException("Port must be between 1 and 65535"));
         }
 
         /**

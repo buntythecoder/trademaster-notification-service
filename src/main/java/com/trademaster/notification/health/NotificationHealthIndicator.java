@@ -35,35 +35,21 @@ public class NotificationHealthIndicator implements HealthIndicator {
     private LocalDateTime lastHealthCheck = LocalDateTime.now();
     private Health lastKnownHealth = Health.up().build();
 
+    /**
+     * Health check with caching
+     *
+     * MANDATORY: Rule #3 - Functional Programming (NO if-else, Optional chain)
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 3
+     */
     @Override
     public Health health() {
         try {
-            // Cache health check results for 30 seconds to avoid excessive checks
-            if (ChronoUnit.SECONDS.between(lastHealthCheck, LocalDateTime.now()) < 30) {
-                return lastKnownHealth;
-            }
-
-            CompletableFuture<Health> emailHealth = checkEmailServiceHealth();
-            CompletableFuture<Health> smsHealth = checkSmsServiceHealth();
-            CompletableFuture<Health> templateHealth = checkTemplateServiceHealth();
-            CompletableFuture<Health> queueHealth = checkQueueHealth();
-
-            // Combine all health checks with timeout
-            CompletableFuture<Health> combinedHealth = CompletableFuture.allOf(
-                    emailHealth, smsHealth, templateHealth, queueHealth
-                )
-                .thenApply(_ -> aggregateHealthResults(
-                    emailHealth.join(),
-                    smsHealth.join(),
-                    templateHealth.join(),
-                    queueHealth.join()
-                ))
-                .orTimeout(HEALTH_CHECK_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-
-            lastKnownHealth = combinedHealth.join();
-            lastHealthCheck = LocalDateTime.now();
-            
-            return lastKnownHealth;
+            // Rule #3: NO if-else, use Optional.filter() for cache check
+            return java.util.Optional.of(ChronoUnit.SECONDS.between(lastHealthCheck, LocalDateTime.now()))
+                .filter(seconds -> seconds < 30)
+                .map(_ -> lastKnownHealth)
+                .orElseGet(this::performHealthCheck);
 
         } catch (Exception e) {
             log.error("Health check failed", e);
@@ -73,6 +59,37 @@ public class NotificationHealthIndicator implements HealthIndicator {
                 .withDetail("component", "notification-service")
                 .build();
         }
+    }
+
+    /**
+     * Perform full health check across all services
+     *
+     * MANDATORY: Rule #12 - Virtual Threads for async operations
+     * MANDATORY: Rule #5 - Cognitive Complexity ≤7
+     * Complexity: 2
+     */
+    private Health performHealthCheck() {
+        CompletableFuture<Health> emailHealth = checkEmailServiceHealth();
+        CompletableFuture<Health> smsHealth = checkSmsServiceHealth();
+        CompletableFuture<Health> templateHealth = checkTemplateServiceHealth();
+        CompletableFuture<Health> queueHealth = checkQueueHealth();
+
+        // Combine all health checks with timeout
+        CompletableFuture<Health> combinedHealth = CompletableFuture.allOf(
+                emailHealth, smsHealth, templateHealth, queueHealth
+            )
+            .thenApply(_ -> aggregateHealthResults(
+                emailHealth.join(),
+                smsHealth.join(),
+                templateHealth.join(),
+                queueHealth.join()
+            ))
+            .orTimeout(HEALTH_CHECK_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+        lastKnownHealth = combinedHealth.join();
+        lastHealthCheck = LocalDateTime.now();
+
+        return lastKnownHealth;
     }
 
     /**

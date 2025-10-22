@@ -2,15 +2,18 @@ package com.trademaster.notification.dto;
 
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import lombok.Builder;
 import java.util.List;
 import java.util.Map;
 
 /**
  * Bulk Notification Request DTO
- * 
+ *
  * MANDATORY: Immutability & Records - Rule #9
  * MANDATORY: Validation - Rule #23
+ * MANDATORY: Lombok Standards - Rule #10
  */
+@Builder(toBuilder = true)
 public record BulkNotificationRequest(
     @NotNull NotificationRequest.NotificationType type,
     @NotEmpty List<String> recipients,
