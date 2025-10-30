@@ -12,8 +12,12 @@ import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.listener.ContainerProperties;
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
+import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -132,9 +136,56 @@ public class KafkaConsumerConfig {
         factory.setConcurrency(3);
         factory.setBatchListener(false);
 
-        log.info("Created Kafka listener factory with Virtual Thread executor and concurrency=3");
+        // MANDATORY: Rule #25 - Error handling with Dead Letter Queue
+        factory.setCommonErrorHandler(kafkaErrorHandler(null));
+
+        log.info("Created Kafka listener factory with Virtual Thread executor, concurrency=3, and DLQ error handling");
 
         return factory;
+    }
+
+    /**
+     * Kafka Error Handler with Dead Letter Queue
+     *
+     * MANDATORY: Rule #25 - Circuit Breaker and Error Handling
+     * MANDATORY: Rule #11 - Functional Error Handling
+     *
+     * Configuration:
+     * - Max 3 retry attempts with 5-second intervals
+     * - Failed messages published to trading.notifications.dlq
+     * - Exceptions logged with full context
+     *
+     * @param kafkaTemplate Kafka template for DLQ publishing
+     * @return Configured error handler with DLQ
+     */
+    @Bean
+    public DefaultErrorHandler kafkaErrorHandler(KafkaTemplate<String, Object> kafkaTemplate) {
+        // Dead Letter Queue recoverer
+        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
+            kafkaTemplate,
+            (record, ex) -> {
+                // Publish failed messages to DLQ topic
+                String dlqTopic = record.topic() + ".dlq";
+                log.error("Publishing failed message to DLQ: topic={}, partition={}, offset={}, error={}",
+                        dlqTopic, record.partition(), record.offset(), ex.getMessage());
+                return new org.apache.kafka.common.TopicPartition(dlqTopic, record.partition());
+            }
+        );
+
+        // Fixed backoff: 3 attempts with 5-second intervals
+        FixedBackOff backOff = new FixedBackOff(5000L, 3L);
+
+        DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, backOff);
+
+        // Log all retries
+        errorHandler.setRetryListeners((record, ex, deliveryAttempt) ->
+            log.warn("Retry attempt {} for message: topic={}, partition={}, offset={}, error={}",
+                    deliveryAttempt, record.topic(), record.partition(), record.offset(), ex.getMessage())
+        );
+
+        log.info("Created Kafka error handler with DLQ support: maxAttempts=3, interval=5000ms");
+
+        return errorHandler;
     }
 
     /**
